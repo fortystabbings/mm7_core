@@ -9,22 +9,7 @@ erl_crash.dump
 /config/*.secret.exs
 .elixir_ls/
 
-
-# Codex local state
-.codex/
-
-# Agent/docs files kept local only
-AGENTS.md
-PLANNING.md
-CHANGELOG.md
-.agent/
-.codex
-AGENTS.md
-PLANNING.md
-CHANGELOG.md
-.agent/
-
-# Local-only files
+# Codex / local-only files
 .codex
 .codex/
 AGENTS.md
