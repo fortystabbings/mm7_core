@@ -1,13 +1,21 @@
-# MM7 Workspace (Preparation Phase)
+# MM7Core
 
-This repository currently contains environment and workspace preparation for a future MM7/MMS Erlang/Elixir library.
+**TODO: Add description**
 
-Current state:
-- Runtime management is configured with `asdf`.
-- Erlang and Elixir runtimes are installed and pinned from `~/projects/.tool-versions`.
-- Repository guidance and planning documents are in place.
-- No Mix project or protocol implementation has been scaffolded yet.
+## Installation
 
-Intended next phase:
-- Generate project scaffolding only when explicitly requested.
-- Define MM7 architecture and protocol-level design decisions.
+If [available in Hex](https://hex.pm/docs/publish), the package can be installed
+by adding `mm7_core` to your list of dependencies in `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:mm7_core, "~> 0.1.0"}
+  ]
+end
+```
+
+Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
+and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
+be found at <https://hexdocs.pm/mm7_core>.
+
