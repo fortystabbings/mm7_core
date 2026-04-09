@@ -1,0 +1,39 @@
+<!-- Stage-1 body-only template (canonical REL-6-MM7-1-4, no SOAP/MIME). -->
+<SubmitReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <MM7Version>{{required:mm7_version}}</MM7Version>
+  <SenderIdentification>
+    <VASPID>{{optional:sender_identification.vasp_id}}</VASPID>
+    <VASID>{{optional:sender_identification.vas_id}}</VASID>
+    <!-- SenderAddress optional, address tag must be Number|RFC2822Address|ShortCode -->
+  </SenderIdentification>
+  <Recipients>
+    <To>
+      <Number>{{required:recipients.to[0].value}}</Number>
+    </To>
+    <!-- Cc/Bcc optional -->
+  </Recipients>
+  <!-- Optional fields must keep XSD order when present. -->
+  <ServiceCode>{{optional:service_code}}</ServiceCode>
+  <LinkedID>{{optional:linked_id}}</LinkedID>
+  <MessageClass>{{optional:message_class}}</MessageClass>
+  <TimeStamp>{{optional:time_stamp}}</TimeStamp>
+  <ReplyCharging replyChargingSize="{{optional:reply_charging.reply_charging_size}}" replyDeadline="{{optional:reply_charging.reply_deadline}}"/>
+  <EarliestDeliveryTime>{{optional:earliest_delivery_time}}</EarliestDeliveryTime>
+  <ExpiryDate>{{optional:expiry_date}}</ExpiryDate>
+  <DeliveryReport>{{optional:delivery_report}}</DeliveryReport>
+  <ReadReply>{{optional:read_reply}}</ReadReply>
+  <Priority>{{optional:priority}}</Priority>
+  <Subject>{{optional:subject}}</Subject>
+  <ChargedParty>{{optional:charged_party}}</ChargedParty>
+  <ChargedPartyID>{{optional:charged_party_id}}</ChargedPartyID>
+  <DistributionIndicator>{{optional:distribution_indicator}}</DistributionIndicator>
+  <DeliveryCondition>
+    <DC>{{optional:delivery_condition.dc[]}}</DC>
+  </DeliveryCondition>
+  <ApplicID>{{optional:applic_id}}</ApplicID>
+  <ReplyApplicID>{{optional:reply_applic_id}}</ReplyApplicID>
+  <AuxApplicInfo>{{optional:aux_applic_info}}</AuxApplicInfo>
+  <ContentClass>{{optional:content_class}}</ContentClass>
+  <DRMContent>{{optional:drm_content}}</DRMContent>
+  <Content href="{{optional:content.href}}" allowAdaptations="{{optional:content.allow_adaptations}}"/>
+</SubmitReq>

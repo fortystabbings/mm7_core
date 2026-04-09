@@ -1,0 +1,49 @@
+{
+  "kind": "mm7_submit_req",
+  "mm7_version": "6.8.0",
+  "sender_identification": {
+    "vasp_id": "TNN",
+    "vas_id": "News"
+  },
+  "recipients": {
+    "to": [
+      {
+        "address_kind": "number",
+        "value": "7255441234"
+      }
+    ],
+    "cc": [
+      {
+        "address_kind": "number",
+        "value": "7255443333"
+      }
+    ],
+    "bcc": [
+      {
+        "address_kind": "rfc2822_address",
+        "value": "7255444444@omms.com"
+      }
+    ]
+  },
+  "service_code": "gold-sp33-im42",
+  "linked_id": "mms00016666",
+  "message_class": "Informational",
+  "time_stamp": "2002-01-02T09:30:47-05:00",
+  "earliest_delivery_time": "2002-01-02T09:30:47-05:00",
+  "expiry_date": "P90D",
+  "delivery_report": true,
+  "priority": "Normal",
+  "subject": "News for today",
+  "content_class": "video-rich",
+  "drm_content": true,
+  "charged_party": "Sender",
+  "distribution_indicator": true,
+  "content": {
+    "href": "cid:SaturnPics-01020930@news.tnn.com",
+    "allow_adaptations": true
+  },
+  "_notes": [
+    "Это JSON-пример для ручной сверки stage-1 body-level.",
+    "TransactionID, SOAP Header и MIME Content-Type/attachments находятся вне scope stage-1."
+  ]
+}

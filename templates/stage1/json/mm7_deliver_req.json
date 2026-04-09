@@ -1,0 +1,22 @@
+{
+  "kind": "mm7_deliver_req",
+  "mm7_version": "6.8.0",
+  "vasp_id": "TNN",
+  "vas_id": "Reminder",
+  "mms_relay_server_id": "240.110.75.34",
+  "linked_id": "wthr8391",
+  "sender": {
+    "address_kind": "rfc2822_address",
+    "value": "97254265781@omms.com"
+  },
+  "time_stamp": "2002-04-15T14:35:21-05:00",
+  "priority": "Normal",
+  "subject": "Weather Forecast",
+  "content": {
+    "href": "cid:forecast-location200102-86453"
+  },
+  "_notes": [
+    "Recipient(s) для DeliverReq optional по таблицам и XSD.",
+    "MIME-part content и Content-Type находятся вне текущего stage-1 scope."
+  ]
+}

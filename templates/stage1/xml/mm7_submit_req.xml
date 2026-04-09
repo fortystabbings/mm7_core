@@ -1,0 +1,19 @@
+<SubmitReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <MM7Version>6.8.0</MM7Version>
+  <SenderIdentification>
+    <VASPID>TNN</VASPID>
+    <VASID>News</VASID>
+  </SenderIdentification>
+  <Recipients>
+    <To>
+      <Number>7255441234</Number>
+    </To>
+    <Cc>
+      <RFC2822Address displayOnly="true">news@example.com</RFC2822Address>
+    </Cc>
+  </Recipients>
+  <ServiceCode>gold-sp33-im42</ServiceCode>
+  <Subject>News for today</Subject>
+  <ContentClass>video-rich</ContentClass>
+  <Content href="cid:SaturnPics-01020930@news.tnn.com" allowAdaptations="true"/>
+</SubmitReq>

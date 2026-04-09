@@ -1,0 +1,13 @@
+{
+  "kind": "mm7_deliver_res",
+  "mm7_version": "6.8.0",
+  "status": {
+    "status_code": 1000,
+    "status_text": "Success"
+  },
+  "service_code": "weather-premium",
+  "_notes": [
+    "StatusText в таблицах optional, в raw XSD фактически required через responseStatusType.",
+    "В PDF sample error-путь показан через SOAP Fault + VASPErrorRsp, а не через DeliverRsp."
+  ]
+}

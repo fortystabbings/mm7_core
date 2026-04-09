@@ -1,0 +1,40 @@
+{
+  "kind": "mm7_deliver_req",
+  "mm7_version": "<required:string>",
+  "mms_relay_server_id": "<optional:string>",
+  "vasp_id": "<optional:string>",
+  "vas_id": "<optional:string>",
+  "linked_id": "<optional:string>",
+  "sender": {
+    "address_kind": "<required:number|rfc2822_address|short_code>",
+    "value": "<required:string>",
+    "display_only": "<optional:boolean>",
+    "address_coding": "<optional:encrypted|obfuscated>"
+  },
+  "recipients": {
+    "to": [],
+    "cc": [],
+    "bcc": []
+  },
+  "sender_spi": "<optional:string>",
+  "recipient_spi": "<optional:string>",
+  "time_stamp": "<optional:dateTime>",
+  "reply_charging_id": "<optional:string>",
+  "priority": "<optional:High|Normal|Low>",
+  "subject": "<optional:string>",
+  "ua_capabilities": {
+    "ua_prof": "<optional:string>",
+    "time_stamp": "<optional:dateTime|duration>"
+  },
+  "applic_id": "<optional:string>",
+  "reply_applic_id": "<optional:string>",
+  "aux_applic_info": "<optional:string>",
+  "content": {
+    "href": "<optional:anyURI>"
+  },
+  "_notes": [
+    "Body-level stage-1 минимум: kind + mm7_version + sender.",
+    "TransactionID/SOAP/MIME вне scope stage-1.",
+    "Previouslysentby и Previouslysentdateandtime в текущем прототипе не поддержаны."
+  ]
+}

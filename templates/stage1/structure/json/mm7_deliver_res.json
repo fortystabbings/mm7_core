@@ -1,0 +1,14 @@
+{
+  "kind": "mm7_deliver_res",
+  "mm7_version": "<required:string>",
+  "status": {
+    "status_code": "<required:integer>",
+    "status_text": "<required_by_xsd:string>",
+    "details": "<optional:any>"
+  },
+  "service_code": "<optional:string>",
+  "_notes": [
+    "Body-level stage-1 минимум: kind + mm7_version + status.status_code.",
+    "В канонической модели этого прохода StatusText трактуется как required для генерации."
+  ]
+}

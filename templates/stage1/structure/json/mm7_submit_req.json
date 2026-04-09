@@ -1,0 +1,58 @@
+{
+  "kind": "mm7_submit_req",
+  "mm7_version": "<required:string>",
+  "sender_identification": {
+    "vasp_id": "<optional:string>",
+    "vas_id": "<optional:string>",
+    "sender_address": {
+      "address_kind": "<optional:number|rfc2822_address|short_code>",
+      "value": "<optional:string>",
+      "display_only": "<optional:boolean>",
+      "address_coding": "<optional:encrypted|obfuscated>"
+    }
+  },
+  "recipients": {
+    "to": [
+      {
+        "address_kind": "<required_in_entry:number|rfc2822_address|short_code>",
+        "value": "<required_in_entry:string>"
+      }
+    ],
+    "cc": [],
+    "bcc": []
+  },
+  "service_code": "<optional:string>",
+  "linked_id": "<optional:string>",
+  "message_class": "<optional:Personal|Informational|Advertisement|Auto>",
+  "time_stamp": "<optional:dateTime>",
+  "expiry_date": "<optional:dateTime|duration>",
+  "earliest_delivery_time": "<optional:dateTime|duration>",
+  "delivery_report": "<optional:boolean>",
+  "read_reply": "<optional:boolean>",
+  "reply_charging": {
+    "reply_charging_size": "<optional:positive_integer>",
+    "reply_deadline": "<optional:dateTime|duration>"
+  },
+  "priority": "<optional:High|Normal|Low>",
+  "subject": "<optional:string>",
+  "content_class": "<optional:content_class_enum>",
+  "drm_content": "<optional:boolean>",
+  "charged_party": "<optional:Sender|Recipient|Both|Neither|ThirdParty>",
+  "charged_party_id": "<optional:string>",
+  "distribution_indicator": "<optional:boolean>",
+  "delivery_condition": {
+    "dc": []
+  },
+  "applic_id": "<optional:string>",
+  "reply_applic_id": "<optional:string>",
+  "aux_applic_info": "<optional:string>",
+  "content": {
+    "href": "<optional:anyURI>",
+    "allow_adaptations": "<optional:boolean>"
+  },
+  "_notes": [
+    "Body-level stage-1 минимум: kind + mm7_version + recipients.",
+    "SenderIdentification обязателен по XSD на XML-уровне; если map не передан, прототип генерирует пустой элемент.",
+    "TransactionID/SOAP/MIME вне scope stage-1."
+  ]
+}

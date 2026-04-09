@@ -1,0 +1,13 @@
+{
+  "kind": "mm7_submit_res",
+  "mm7_version": "6.8.0",
+  "status": {
+    "status_code": 1000,
+    "status_text": "Success"
+  },
+  "message_id": "041502073667",
+  "_notes": [
+    "MessageID в таблице описан как conditional (для success), а raw XSD делает его обязательным.",
+    "StatusText в таблице optional, в raw XSD фактически required через responseStatusType."
+  ]
+}

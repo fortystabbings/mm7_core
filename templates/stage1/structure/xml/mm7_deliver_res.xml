@@ -1,0 +1,10 @@
+<!-- Stage-1 body-only template (canonical REL-6-MM7-1-4, no SOAP/MIME). -->
+<DeliverRsp xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <MM7Version>{{required:mm7_version}}</MM7Version>
+  <Status>
+    <StatusCode>{{required:status.status_code}}</StatusCode>
+    <StatusText>{{required_by_xsd:status.status_text}}</StatusText>
+    <Details>{{optional:status.details}}</Details>
+  </Status>
+  <ServiceCode>{{optional:service_code}}</ServiceCode>
+</DeliverRsp>

@@ -1,0 +1,19 @@
+<DeliverReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <MM7Version>6.8.0</MM7Version>
+  <MMSRelayServerID>240.110.75.34</MMSRelayServerID>
+  <VASPID>TNN</VASPID>
+  <VASID>Reminder</VASID>
+  <LinkedID>wthr8391</LinkedID>
+  <Sender>
+    <RFC2822Address>97254265781@OMMS.com</RFC2822Address>
+  </Sender>
+  <Recipients>
+    <To>
+      <Number>7255441234</Number>
+    </To>
+  </Recipients>
+  <TimeStamp>2002-04-15T14:35:21-05:00</TimeStamp>
+  <Priority>Normal</Priority>
+  <Subject>Weather Forecast</Subject>
+  <Content href="cid:forecast-location200102-86453"/>
+</DeliverReq>

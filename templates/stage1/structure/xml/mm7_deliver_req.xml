@@ -1,0 +1,27 @@
+<!-- Stage-1 body-only template (canonical REL-6-MM7-1-4, no SOAP/MIME). -->
+<DeliverReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <MM7Version>{{required:mm7_version}}</MM7Version>
+  <MMSRelayServerID>{{optional:mms_relay_server_id}}</MMSRelayServerID>
+  <VASPID>{{optional:vasp_id}}</VASPID>
+  <VASID>{{optional:vas_id}}</VASID>
+  <LinkedID>{{optional:linked_id}}</LinkedID>
+  <Sender>
+    <RFC2822Address>{{required:sender.value}}</RFC2822Address>
+  </Sender>
+  <Recipients>
+    <To>
+      <Number>{{optional:recipients.to[0].value}}</Number>
+    </To>
+  </Recipients>
+  <SenderSPI>{{optional:sender_spi}}</SenderSPI>
+  <RecipientSPI>{{optional:recipient_spi}}</RecipientSPI>
+  <TimeStamp>{{optional:time_stamp}}</TimeStamp>
+  <ReplyChargingID>{{optional:reply_charging_id}}</ReplyChargingID>
+  <Priority>{{optional:priority}}</Priority>
+  <Subject>{{optional:subject}}</Subject>
+  <ApplicID>{{optional:applic_id}}</ApplicID>
+  <ReplyApplicID>{{optional:reply_applic_id}}</ReplyApplicID>
+  <AuxApplicInfo>{{optional:aux_applic_info}}</AuxApplicInfo>
+  <UACapabilities UAProf="{{optional:ua_capabilities.ua_prof}}" TimeStamp="{{optional:ua_capabilities.time_stamp}}"/>
+  <Content href="{{optional:content.href}}"/>
+</DeliverReq>
