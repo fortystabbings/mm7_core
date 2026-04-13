@@ -22,15 +22,16 @@
 ## API
 - Основная функция: `MM7Core.convert(input, opts \\ [])`
 - Вход:
-  - XML body (`binary`) -> `{:ok, map}`
-  - JSON (`binary`) с `kind` -> `{:ok, xml_body}`
-  - `map` с `kind` -> `{:ok, xml_body}`
+  - XML body (`binary`) -> `{:ok, struct}`
+  - поддержанный Elixir struct -> `{:ok, xml_body}`
 - Ошибки: `{:error, %{code: atom(), message: binary(), details: map()}}`
-- Нормализованный `map`/JSON обрабатывается строго:
-  - без неявного приведения типов
-  - с явной ошибкой для неверных boolean/string значений
+- Публичный in-memory contract stage-1:
+  - `MM7Core.Messages.SubmitReq`
+  - `MM7Core.Messages.SubmitRsp`
+  - `MM7Core.Messages.DeliverReq`
+  - `MM7Core.Messages.DeliverRsp`
 
-Пример XML -> map:
+Пример XML -> struct:
 
 ```elixir
 xml = """
@@ -41,17 +42,16 @@ xml = """
 </SubmitReq>
 """
 
-{:ok, map} = MM7Core.convert(xml)
+{:ok, %MM7Core.Messages.SubmitReq{} = struct} = MM7Core.convert(xml)
 ```
 
-Пример map -> XML:
+Пример struct -> XML:
 
 ```elixir
-input = %{
-  "kind" => "mm7_submit_res",
-  "mm7_version" => "6.8.0",
-  "status" => %{"status_code" => 1000, "status_text" => "Success"},
-  "message_id" => "m-1"
+input = %MM7Core.Messages.SubmitRsp{
+  mm7_version: "6.8.0",
+  status: %MM7Core.Messages.Status{status_code: 1000, status_text: "Success"},
+  message_id: "m-1"
 }
 
 {:ok, xml} = MM7Core.convert(input)
@@ -67,13 +67,13 @@ MIX_HOME=/tmp/mix HEX_HOME=/tmp/hex mix test
 
 ## Шаблоны и ручная проверка
 - Примеры:
-  - `templates/stage1/json/*`
+  - `templates/stage1/struct/*`
   - `templates/stage1/xml/*`
   - это runnable входы для ручной проверки
 - Структурные заготовки:
-  - `templates/stage1/structure/json/*`
+  - `templates/stage1/structure/struct/*`
   - `templates/stage1/structure/xml/*`
-  - это inspection-only файлы для визуальной сверки со spec, не рабочие payload
+  - это inspection-only файлы для визуальной сверки со spec и struct contract, не рабочие payload
 - Ручной вход/выход:
   - `samples/in`
   - `samples/out`
@@ -81,50 +81,21 @@ MIX_HOME=/tmp/mix HEX_HOME=/tmp/hex mix test
 ## Ручная проверка (ровно 1 вход -> ровно 1 выход)
 1. Положите ровно один входной файл в `samples/in`:
    - либо XML body fragment (`SubmitReq` / `SubmitRsp` / `DeliverReq` / `DeliverRsp`);
-   - либо JSON с явным `kind`.
+   - либо `.exs` файл, который вычисляется в один поддержанный struct.
+   - `.exs` вход исполняется локально Elixir-рантаймом, поэтому используйте только доверенные файлы.
 2. Запустите одну команду:
-   Команда ниже перед записью результата удаляет все предыдущие non-hidden файлы из `samples/out`, чтобы на выходе остался ровно один актуальный файл.
+   Запускайте её из корня репозитория. Скрипт пишет результат только после успешной конвертации и затем оставляет в `samples/out` ровно один актуальный non-hidden файл.
 
 ```bash
-MIX_HOME=/tmp/mix HEX_HOME=/tmp/hex mix run -e '
-in_files =
-  Path.wildcard("samples/in/*")
-  |> Enum.reject(&(Path.basename(&1) |> String.starts_with?(".")))
-
-if length(in_files) != 1 do
-  IO.puts("ERROR: samples/in должен содержать ровно 1 входной файл")
-  System.halt(1)
-end
-
-Path.wildcard("samples/out/*")
-|> Enum.reject(&(Path.basename(&1) |> String.starts_with?(".")))
-|> Enum.each(&File.rm!/1)
-
-in_file = hd(in_files)
-input = File.read!(in_file)
-base = Path.rootname(Path.basename(in_file))
-
-case MM7Core.convert(input) do
-  {:ok, out} when is_map(out) ->
-    out_file = "samples/out/" <> base <> ".json"
-    File.write!(out_file, Jason.encode_to_iodata!(out, pretty: true))
-    IO.puts("OK: " <> out_file)
-
-  {:ok, out} when is_binary(out) ->
-    out_file = "samples/out/" <> base <> ".xml"
-    File.write!(out_file, out)
-    IO.puts("OK: " <> out_file)
-
-  {:error, err} ->
-    IO.puts("ERROR: " <> inspect(err))
-    System.halt(1)
-end
-'
+elixir scripts/manual_convert.exs
 ```
 
-3. В `samples/out` будет создан ровно один файл противоположного формата.
+3. В `samples/out` будет создан ровно один файл противоположного формата:
+   - XML -> `.exs`
+   - struct `.exs` -> `.xml`
 
 ## Ограничения stage-1
 - Нет SOAP/MIME функциональности.
 - Нет legacy namespace/compatibility mode.
+- JSON/map больше не являются основным публичным contract stage-1.
 - XML-структуры в `templates/stage1/structure/xml/*` отражают полный canonical body tree из XSD, но runtime покрывает только stage-1 practical subset.

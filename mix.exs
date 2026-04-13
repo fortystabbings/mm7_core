@@ -18,8 +18,6 @@ defmodule MM7Core.MixProject do
   end
 
   defp deps do
-    [
-      {:jason, "~> 1.4"}
-    ]
+    []
   end
 end
