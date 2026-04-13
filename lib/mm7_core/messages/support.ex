@@ -1,11 +1,6 @@
 defmodule MM7Core.Messages.Support do
   @moduledoc false
 
-  alias MM7Core.Messages.Address
-  alias MM7Core.Messages.Recipients
-  alias MM7Core.Messages.SenderIdentification
-  alias MM7Core.Messages.Status
-
   @canonical_ns "http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4"
 
   @address_tag_to_kind %{
@@ -30,6 +25,23 @@ defmodule MM7Core.Messages.Support do
     {:text, :vas_id, "VASID"}
   ]
 
+  @type error_result :: {:error, MM7Core.error_t()}
+  @type result(value) :: {:ok, value} | error_result()
+  @type xml_attr :: %{
+          required(:ns) => String.t(),
+          required(:value) => String.t(),
+          optional(:duplicate?) => true
+        }
+  @type xml_node :: %{
+          required(:name) => String.t(),
+          required(:ns) => String.t(),
+          required(:attrs) => %{optional(String.t()) => xml_attr()},
+          required(:children) => [xml_node()],
+          required(:text) => String.t()
+        }
+  @type optional_field_spec :: {:text | :bool, atom(), String.t()}
+
+  @spec ensure_children(xml_node(), [String.t()], keyword()) :: :ok | error_result()
   def ensure_children(node, allowed, opts \\ []) do
     ordered? = Keyword.get(opts, :ordered, true)
     names = Enum.map(element_children(node), & &1.name)
@@ -50,6 +62,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec required_text(xml_node(), String.t()) :: result(String.t())
   def required_text(node, name) do
     case optional_text(node, name) do
       {:ok, nil} -> error(:invalid_structure, "missing #{name}")
@@ -58,6 +71,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec optional_text(xml_node(), String.t()) :: result(String.t() | nil)
   def optional_text(node, name) do
     with {:ok, child} <- single_child(node, name) do
       case child do
@@ -67,6 +81,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec collect_optional_fields(xml_node(), [optional_field_spec()]) :: result(map())
   def collect_optional_fields(node, fields) do
     Enum.reduce_while(fields, {:ok, %{}}, fn field, {:ok, acc} ->
       case collect_optional_field(node, field) do
@@ -77,6 +92,8 @@ defmodule MM7Core.Messages.Support do
     end)
   end
 
+  @spec required_sender_identification(xml_node()) ::
+          result(MM7Core.Messages.SenderIdentification.t() | nil)
   def required_sender_identification(root) do
     with {:ok, node} <- single_child(root, "SenderIdentification") do
       case node do
@@ -86,6 +103,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec required_recipients(xml_node()) :: result(MM7Core.Messages.Recipients.t())
   def required_recipients(root) do
     with {:ok, node} <- single_child(root, "Recipients") do
       case node do
@@ -95,6 +113,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec optional_recipients(xml_node()) :: result(MM7Core.Messages.Recipients.t() | nil)
   def optional_recipients(root) do
     with {:ok, node} <- single_child(root, "Recipients") do
       case node do
@@ -104,6 +123,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec required_address(xml_node(), String.t()) :: result(MM7Core.Messages.Address.t())
   def required_address(root, name) do
     with {:ok, node} <- single_child(root, name) do
       case node do
@@ -113,6 +133,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec optional_address(xml_node(), String.t()) :: result(MM7Core.Messages.Address.t() | nil)
   defp optional_address(root, name) do
     with {:ok, node} <- single_child(root, name) do
       case node do
@@ -122,6 +143,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec decode_status(xml_node()) :: result(MM7Core.Messages.Status.t())
   def decode_status(root) do
     with {:ok, node} <- single_child(root, "Status") do
       case node do
@@ -134,6 +156,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec validate_exact_struct_keys(struct()) :: :ok | error_result()
   def validate_exact_struct_keys(%module{} = struct) do
     expected =
       module
@@ -157,6 +180,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec validate_string_fields(struct(), [atom()]) :: :ok | error_result()
   def validate_string_fields(struct, fields) do
     Enum.reduce_while(fields, :ok, fn field, :ok ->
       case validate_string_value(Map.get(struct, field), Atom.to_string(field), :invalid_struct) do
@@ -166,6 +190,7 @@ defmodule MM7Core.Messages.Support do
     end)
   end
 
+  @spec validate_required_string(term(), String.t(), atom()) :: :ok | error_result()
   def validate_required_string(value, _field, _code) when is_binary(value) and value != "",
     do: :ok
 
@@ -173,6 +198,7 @@ defmodule MM7Core.Messages.Support do
     error(code, "field must be non-empty string", %{field: field})
   end
 
+  @spec validate_boolean_fields(struct(), [atom()]) :: :ok | error_result()
   def validate_boolean_fields(struct, fields) do
     Enum.reduce_while(fields, :ok, fn field, :ok ->
       case validate_optional_boolean(Map.get(struct, field), Atom.to_string(field)) do
@@ -182,6 +208,7 @@ defmodule MM7Core.Messages.Support do
     end)
   end
 
+  @spec validate_optional_boolean(term(), String.t()) :: :ok | error_result()
   def validate_optional_boolean(nil, _field), do: :ok
   def validate_optional_boolean(true, _field), do: :ok
   def validate_optional_boolean(false, _field), do: :ok
@@ -190,6 +217,7 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_struct, "field must be boolean", %{field: field})
   end
 
+  @spec validate_optional_positive_integer(term(), String.t()) :: :ok | error_result()
   def validate_optional_positive_integer(nil, _field), do: :ok
 
   def validate_optional_positive_integer(value, _field) when is_integer(value) and value > 0,
@@ -199,28 +227,33 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_struct, "field must be positive integer", %{field: field})
   end
 
+  @spec maybe_missing_string([String.t()], term(), String.t()) :: [String.t()]
   def maybe_missing_string(list, value, _field) when is_binary(value) and value != "", do: list
   def maybe_missing_string(list, _value, field), do: list ++ [field]
 
-  def maybe_missing_address(list, %Address{kind: kind, value: value}, _field)
+  @spec maybe_missing_address([String.t()], term(), String.t()) :: [String.t()]
+  def maybe_missing_address(list, %MM7Core.Messages.Address{kind: kind, value: value}, _field)
       when kind in @address_kinds and is_binary(value) and value != "" do
     list
   end
 
   def maybe_missing_address(list, _value, field), do: list ++ [field]
 
-  def maybe_missing_status_code(list, %Status{status_code: value})
+  @spec maybe_missing_status_code([String.t()], term()) :: [String.t()]
+  def maybe_missing_status_code(list, %MM7Core.Messages.Status{status_code: value})
       when is_integer(value) and value > 0,
       do: list
 
   def maybe_missing_status_code(list, _value), do: list ++ ["status.status_code"]
 
-  def maybe_missing_recipients(list, %Recipients{} = recipients) do
+  @spec maybe_missing_recipients([String.t()], term()) :: [String.t()]
+  def maybe_missing_recipients(list, %MM7Core.Messages.Recipients{} = recipients) do
     if recipients_empty?(recipients), do: list ++ ["recipients"], else: list
   end
 
   def maybe_missing_recipients(list, _value), do: list ++ ["recipients"]
 
+  @spec missing_or_ok(module(), [String.t()]) :: :ok | error_result()
   def missing_or_ok(_module, []), do: :ok
 
   def missing_or_ok(module, missing) do
@@ -230,9 +263,12 @@ defmodule MM7Core.Messages.Support do
     })
   end
 
+  @spec validate_sender_identification(term()) :: :ok | error_result()
   def validate_sender_identification(nil), do: :ok
 
-  def validate_sender_identification(%SenderIdentification{} = sender_identification) do
+  def validate_sender_identification(
+        %MM7Core.Messages.SenderIdentification{} = sender_identification
+      ) do
     with :ok <- validate_string_fields(sender_identification, [:vasp_id, :vas_id]),
          :ok <- validate_address(sender_identification.sender_address) do
       :ok
@@ -243,9 +279,10 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_struct, "sender_identification must be struct")
   end
 
+  @spec validate_status(term()) :: :ok | error_result()
   def validate_status(nil), do: :ok
 
-  def validate_status(%Status{} = status) do
+  def validate_status(%MM7Core.Messages.Status{} = status) do
     with :ok <- validate_optional_positive_integer(status.status_code, "status.status_code"),
          :ok <- validate_string_fields(status, [:status_text, :details]) do
       :ok
@@ -256,9 +293,10 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_struct, "status must be struct")
   end
 
+  @spec validate_recipients(term()) :: :ok | error_result()
   def validate_recipients(nil), do: :ok
 
-  def validate_recipients(%Recipients{} = recipients) do
+  def validate_recipients(%MM7Core.Messages.Recipients{} = recipients) do
     with :ok <- validate_address_list(recipients.to, "recipients.to"),
          :ok <- validate_address_list(recipients.cc, "recipients.cc"),
          :ok <- validate_address_list(recipients.bcc, "recipients.bcc"),
@@ -271,9 +309,10 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_struct, "recipients must be struct")
   end
 
+  @spec validate_address(term()) :: :ok | error_result()
   def validate_address(nil), do: :ok
 
-  def validate_address(%Address{} = address) do
+  def validate_address(%MM7Core.Messages.Address{} = address) do
     with :ok <- validate_address_kind(address.kind),
          :ok <- validate_required_string(address.value, "address.value", :invalid_struct),
          :ok <- validate_optional_boolean(address.display_only, "address.display_only"),
@@ -287,13 +326,16 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_struct, "address must be struct")
   end
 
-  def recipients_empty?(%Recipients{} = recipients) do
+  @spec recipients_empty?(MM7Core.Messages.Recipients.t()) :: boolean()
+  def recipients_empty?(%MM7Core.Messages.Recipients{} = recipients) do
     recipients.to == [] and recipients.cc == [] and recipients.bcc == []
   end
 
   def encode_sender_identification(nil), do: "<SenderIdentification/>"
 
-  def encode_sender_identification(%SenderIdentification{} = sender_identification) do
+  def encode_sender_identification(
+        %MM7Core.Messages.SenderIdentification{} = sender_identification
+      ) do
     [
       "<SenderIdentification>",
       maybe_tag("VASPID", sender_identification.vasp_id),
@@ -303,7 +345,7 @@ defmodule MM7Core.Messages.Support do
     ]
   end
 
-  def encode_recipients(%Recipients{} = recipients) do
+  def encode_recipients(%MM7Core.Messages.Recipients{} = recipients) do
     [
       "<Recipients>",
       encode_recipient_group("To", recipients.to),
@@ -315,11 +357,11 @@ defmodule MM7Core.Messages.Support do
 
   def encode_optional_recipients(nil), do: ""
 
-  def encode_optional_recipients(%Recipients{} = recipients) do
+  def encode_optional_recipients(%MM7Core.Messages.Recipients{} = recipients) do
     if recipients_empty?(recipients), do: "", else: encode_recipients(recipients)
   end
 
-  def encode_address(%Address{kind: kind, value: value} = address) do
+  def encode_address(%MM7Core.Messages.Address{kind: kind, value: value} = address) do
     tag_name = @address_kind_to_tag[kind]
 
     [
@@ -334,7 +376,8 @@ defmodule MM7Core.Messages.Support do
     ]
   end
 
-  def encode_status(%Status{} = status) do
+  @spec encode_status(MM7Core.Messages.Status.t()) :: result(iodata())
+  def encode_status(%MM7Core.Messages.Status{} = status) do
     with {:ok, status_code} <- parse_positive_integer(status.status_code, "status.status_code") do
       status_text = status.status_text || default_status_text(status_code)
 
@@ -351,15 +394,11 @@ defmodule MM7Core.Messages.Support do
 
   def open_root(name), do: ["<", name, " xmlns=\"", @canonical_ns, "\">"]
   def close_root(name), do: ["</", name, ">"]
-
   def wrap(name, inner), do: ["<", name, ">", inner, "</", name, ">"]
-
   def tag(name, value), do: ["<", name, ">", escape(value), "</", name, ">"]
-
   def maybe_tag(_name, nil), do: ""
   def maybe_tag(_name, ""), do: ""
   def maybe_tag(name, value), do: tag(name, value)
-
   def maybe_attr(_name, nil), do: ""
   def maybe_attr(_name, ""), do: ""
   def maybe_attr(name, value), do: [" ", name, "=\"", escape(value), "\""]
@@ -375,6 +414,7 @@ defmodule MM7Core.Messages.Support do
 
   def escape(value), do: value |> to_string() |> escape()
 
+  @spec parse_positive_integer(String.t() | pos_integer(), String.t()) :: result(pos_integer())
   def parse_positive_integer(value, _field) when is_integer(value) and value > 0, do: {:ok, value}
 
   def parse_positive_integer(value, field) when is_binary(value) do
@@ -388,6 +428,7 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_structure, "expected positive integer", %{field: field})
   end
 
+  @spec parse_optional_xml_bool(String.t() | nil, String.t()) :: result(boolean() | nil)
   def parse_optional_xml_bool(nil, _field), do: {:ok, nil}
   def parse_optional_xml_bool("true", _field), do: {:ok, true}
   def parse_optional_xml_bool("1", _field), do: {:ok, true}
@@ -402,6 +443,7 @@ defmodule MM7Core.Messages.Support do
   def bool_to_text(false), do: "false"
   def bool_to_text(_value), do: nil
 
+  @spec optional_attr(xml_node(), String.t()) :: result(String.t() | nil)
   def optional_attr(node, name) do
     case Map.get(node.attrs, name) do
       nil ->
@@ -424,6 +466,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec error(atom(), String.t(), map()) :: error_result()
   def error(code, message, details \\ %{}) do
     {:error, %{code: code, message: message, details: details}}
   end
@@ -443,6 +486,7 @@ defmodule MM7Core.Messages.Support do
     ordered?
   end
 
+  @spec single_child(xml_node(), String.t()) :: result(xml_node() | nil)
   defp single_child(node, name) do
     matches = Enum.filter(element_children(node), &(&1.name == name))
 
@@ -455,6 +499,7 @@ defmodule MM7Core.Messages.Support do
 
   defp element_children(node), do: node.children
 
+  @spec simple_text(xml_node()) :: result(String.t())
   defp simple_text(node) do
     if element_children(node) == [] do
       value = String.trim(node.text)
@@ -469,6 +514,8 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec collect_optional_field(xml_node(), optional_field_spec()) ::
+          result({atom(), String.t() | boolean()} | nil)
   defp collect_optional_field(node, {:text, key, element_name}) do
     case optional_text(node, element_name) do
       {:ok, nil} -> {:ok, nil}
@@ -487,16 +534,24 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec decode_status_node(xml_node()) :: result(MM7Core.Messages.Status.t())
   defp decode_status_node(node) do
     with :ok <- ensure_children(node, ["StatusCode", "StatusText", "Details"], ordered: false),
          {:ok, status_code_text} <- required_text(node, "StatusCode"),
          {:ok, status_code} <- parse_positive_integer(status_code_text, "status.status_code"),
          {:ok, status_text} <- optional_text(node, "StatusText"),
          {:ok, details} <- optional_text(node, "Details") do
-      {:ok, %Status{status_code: status_code, status_text: status_text, details: details}}
+      {:ok,
+       %MM7Core.Messages.Status{
+         status_code: status_code,
+         status_text: status_text,
+         details: details
+       }}
     end
   end
 
+  @spec decode_sender_identification_node(xml_node()) ::
+          result(MM7Core.Messages.SenderIdentification.t() | nil)
   defp decode_sender_identification_node(node) do
     with :ok <- ensure_children(node, ["VASPID", "VASID", "SenderAddress"]),
          {:ok, sender_address} <- optional_address(node, "SenderAddress"),
@@ -511,11 +566,12 @@ defmodule MM7Core.Messages.Support do
       if map_size(attrs) == 0 do
         {:ok, nil}
       else
-        {:ok, struct(SenderIdentification, attrs)}
+        {:ok, struct(MM7Core.Messages.SenderIdentification, attrs)}
       end
     end
   end
 
+  @spec decode_recipients_node(xml_node()) :: result(MM7Core.Messages.Recipients.t())
   defp decode_recipients_node(node) do
     with :ok <- ensure_children(node, ["To", "Cc", "Bcc"], ordered: false) do
       case Enum.reduce_while(element_children(node), {:ok, %{to: [], cc: [], bcc: []}}, fn child,
@@ -533,7 +589,7 @@ defmodule MM7Core.Messages.Support do
              end
            end) do
         {:ok, groups} ->
-          recipients = %Recipients{to: groups.to, cc: groups.cc, bcc: groups.bcc}
+          recipients = %MM7Core.Messages.Recipients{to: groups.to, cc: groups.cc, bcc: groups.bcc}
 
           if recipients_empty?(recipients) do
             error(:invalid_structure, "Recipients must contain at least one address")
@@ -551,6 +607,7 @@ defmodule MM7Core.Messages.Support do
   defp recipient_group_key("Cc"), do: :cc
   defp recipient_group_key("Bcc"), do: :bcc
 
+  @spec decode_address_list(xml_node()) :: result([MM7Core.Messages.Address.t()])
   defp decode_address_list(node) do
     if String.trim(node.text) != "" do
       error(:invalid_structure, "unexpected text content", %{element: node.name})
@@ -567,6 +624,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec decode_single_address(xml_node(), String.t()) :: result(MM7Core.Messages.Address.t())
   defp decode_single_address(node, element_name) do
     if String.trim(node.text) != "" do
       error(:invalid_structure, "unexpected text content", %{element: element_name})
@@ -578,6 +636,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec decode_address_node(xml_node()) :: result(MM7Core.Messages.Address.t())
   defp decode_address_node(node) do
     kind = @address_tag_to_kind[node.name]
     unknown_attrs = Map.keys(node.attrs) -- ["displayOnly", "addressCoding", "id"]
@@ -600,7 +659,7 @@ defmodule MM7Core.Messages.Support do
              {:ok, id} <- optional_attr(node, "id"),
              {:ok, value} <- simple_text(node) do
           {:ok,
-           %Address{
+           %MM7Core.Messages.Address{
              kind: kind,
              value: value,
              display_only: display_only,
@@ -611,6 +670,7 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec validate_address_list(term(), String.t()) :: :ok | error_result()
   defp validate_address_list(nil, field) do
     error(:invalid_struct, "address list must be list", %{field: field})
   end
@@ -628,6 +688,7 @@ defmodule MM7Core.Messages.Support do
     error(:invalid_struct, "address list must be list", %{field: field})
   end
 
+  @spec validate_recipients_presence(MM7Core.Messages.Recipients.t()) :: :ok | error_result()
   defp validate_recipients_presence(recipients) do
     if recipients_empty?(recipients) do
       error(:invalid_struct, "Recipients must contain at least one address")
@@ -636,12 +697,14 @@ defmodule MM7Core.Messages.Support do
     end
   end
 
+  @spec validate_address_kind(term()) :: :ok | error_result()
   defp validate_address_kind(kind) when kind in @address_kinds, do: :ok
 
   defp validate_address_kind(_kind) do
     error(:invalid_struct, "unknown address kind")
   end
 
+  @spec validate_address_coding(String.t() | nil, atom()) :: :ok | error_result()
   defp validate_address_coding(nil, _code), do: :ok
   defp validate_address_coding("encrypted", _code), do: :ok
   defp validate_address_coding("obfuscated", _code), do: :ok
@@ -650,6 +713,7 @@ defmodule MM7Core.Messages.Support do
     error(code, "field must be encrypted or obfuscated", %{field: "address_coding"})
   end
 
+  @spec validate_string_value(term(), String.t(), atom()) :: :ok | error_result()
   defp validate_string_value(nil, _field, _code), do: :ok
   defp validate_string_value(value, _field, _code) when is_binary(value) and value != "", do: :ok
 
@@ -657,6 +721,7 @@ defmodule MM7Core.Messages.Support do
     error(code, "field must be non-empty string", %{field: field})
   end
 
+  @spec encode_optional_sender_address(MM7Core.Messages.Address.t() | nil) :: iodata()
   defp encode_optional_sender_address(nil), do: ""
 
   defp encode_optional_sender_address(address) do

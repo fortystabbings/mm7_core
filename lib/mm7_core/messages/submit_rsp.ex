@@ -1,19 +1,19 @@
 defmodule MM7Core.Messages.SubmitRsp do
   @moduledoc false
 
-  alias MM7Core.Messages.Status
   alias MM7Core.Messages.Support
 
   @children ["MM7Version", "Status", "MessageID"]
 
   @type t :: %__MODULE__{
           mm7_version: String.t() | nil,
-          status: Status.t() | nil,
+          status: MM7Core.Messages.Status.t() | nil,
           message_id: String.t() | nil
         }
 
   defstruct mm7_version: nil, status: nil, message_id: nil
 
+  @spec from_xml(Support.xml_node()) :: Support.result(t())
   def from_xml(root) do
     with :ok <- Support.ensure_children(root, @children),
          {:ok, mm7_version} <- Support.required_text(root, "MM7Version"),
@@ -23,9 +23,9 @@ defmodule MM7Core.Messages.SubmitRsp do
     end
   end
 
+  @spec to_xml(t()) :: Support.result(String.t())
   def to_xml(%__MODULE__{} = struct) do
-    with :ok <- validate(struct),
-         {:ok, status_xml} <- Support.encode_status(struct.status) do
+    with :ok <- validate(struct), {:ok, status_xml} <- Support.encode_status(struct.status) do
       {:ok,
        IO.iodata_to_binary([
          Support.open_root("SubmitRsp"),
@@ -37,6 +37,7 @@ defmodule MM7Core.Messages.SubmitRsp do
     end
   end
 
+  @spec validate(t() | term()) :: :ok | Support.error_result()
   def validate(%__MODULE__{} = struct) do
     missing =
       []

@@ -21,12 +21,10 @@ end
 defmodule MM7Core.Messages.Recipients do
   @moduledoc false
 
-  alias MM7Core.Messages.Address
-
   @type t :: %__MODULE__{
-          to: [Address.t()],
-          cc: [Address.t()],
-          bcc: [Address.t()]
+          to: [MM7Core.Messages.Address.t()],
+          cc: [MM7Core.Messages.Address.t()],
+          bcc: [MM7Core.Messages.Address.t()]
         }
 
   defstruct to: [], cc: [], bcc: []
@@ -35,12 +33,10 @@ end
 defmodule MM7Core.Messages.SenderIdentification do
   @moduledoc false
 
-  alias MM7Core.Messages.Address
-
   @type t :: %__MODULE__{
           vasp_id: String.t() | nil,
           vas_id: String.t() | nil,
-          sender_address: Address.t() | nil
+          sender_address: MM7Core.Messages.Address.t() | nil
         }
 
   defstruct vasp_id: nil, vas_id: nil, sender_address: nil

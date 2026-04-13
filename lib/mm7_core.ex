@@ -3,26 +3,46 @@ defmodule MM7Core do
   Минимальный stage-1 конвертер MM7 body-level сообщений.
   """
 
-  alias MM7Core.Messages.DeliverReq
-  alias MM7Core.Messages.DeliverRsp
-  alias MM7Core.Messages.SubmitReq
-  alias MM7Core.Messages.SubmitRsp
-
   @canonical_ns "http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4"
 
   @root_to_module %{
-    "SubmitReq" => SubmitReq,
-    "SubmitRsp" => SubmitRsp,
-    "DeliverReq" => DeliverReq,
-    "DeliverRsp" => DeliverRsp
+    "SubmitReq" => MM7Core.Messages.SubmitReq,
+    "SubmitRsp" => MM7Core.Messages.SubmitRsp,
+    "DeliverReq" => MM7Core.Messages.DeliverReq,
+    "DeliverRsp" => MM7Core.Messages.DeliverRsp
   }
   @supported_modules Map.values(@root_to_module)
+
+  @type error_code ::
+          :unsupported_input_format
+          | :invalid_xml
+          | :invalid_struct
+          | :unknown_struct_kind
+          | :unknown_xml_root
+          | :missing_mandatory_fields
+          | :invalid_structure
+          | :unsupported_stage_feature
+
+  @type error_t :: %{
+          code: error_code(),
+          message: String.t(),
+          details: map()
+        }
+
+  @type supported_struct ::
+          MM7Core.Messages.SubmitReq.t()
+          | MM7Core.Messages.SubmitRsp.t()
+          | MM7Core.Messages.DeliverReq.t()
+          | MM7Core.Messages.DeliverRsp.t()
+
+  @type result(value) :: {:ok, value} | {:error, error_t()}
 
   @doc """
   Унифицированный stage-1 API.
   """
   def convert(input, opts \\ [])
 
+  @spec convert(String.t(), keyword()) :: result(supported_struct())
   def convert(input, _opts) when is_binary(input) do
     trimmed = String.trim(input)
 
@@ -38,9 +58,13 @@ defmodule MM7Core do
     end
   end
 
+  @spec convert(supported_struct(), keyword()) :: result(String.t())
   def convert(%_{} = input, _opts), do: struct_to_xml(input)
+
+  @spec convert(term(), keyword()) :: {:error, error_t()}
   def convert(_input, _opts), do: error(:unsupported_input_format, "unsupported input type")
 
+  @spec xml_to_struct(String.t()) :: result(supported_struct())
   defp xml_to_struct(xml) do
     with :ok <- reject_dtd(xml),
          {:ok, root} <- parse_xml(xml),
@@ -53,13 +77,16 @@ defmodule MM7Core do
     end
   end
 
+  @spec struct_to_xml(supported_struct()) :: result(String.t())
   defp struct_to_xml(%module{} = struct) when module in @supported_modules,
     do: module.to_xml(struct)
 
+  @spec struct_to_xml(struct()) :: {:error, error_t()}
   defp struct_to_xml(%module{} = _struct) do
     error(:unknown_struct_kind, "unknown struct kind", %{module: inspect(module)})
   end
 
+  @spec parse_xml(String.t()) :: result(MM7Core.Messages.Support.xml_node())
   defp parse_xml(xml) do
     initial = %{stack: [], root: nil}
 

@@ -33,7 +33,7 @@
 - Внутренняя архитектура stage-1:
   - `MM7Core` — thin routing/core entry module
   - message-specific logic вынесена в отдельные `MM7Core.Messages.*` modules по виду сообщения
-- Общий nested/XML support для этих модулей держится во внутреннем `MM7Core.Messages.Support`; это не public API.
+- internal helper layout не является public API и может упрощаться без изменения contract.
 
 Пример XML -> struct:
 

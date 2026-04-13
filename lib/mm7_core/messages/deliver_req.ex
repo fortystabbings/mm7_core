@@ -1,9 +1,7 @@
 defmodule MM7Core.Messages.DeliverReq do
-  alias MM7Core.Messages.Address
-  alias MM7Core.Messages.Recipients
-  alias MM7Core.Messages.Support
-
   @moduledoc false
+
+  alias MM7Core.Messages.Support
 
   @children [
     "MM7Version",
@@ -42,8 +40,8 @@ defmodule MM7Core.Messages.DeliverReq do
           vasp_id: String.t() | nil,
           vas_id: String.t() | nil,
           linked_id: String.t() | nil,
-          sender: Address.t() | nil,
-          recipients: Recipients.t() | nil,
+          sender: MM7Core.Messages.Address.t() | nil,
+          recipients: MM7Core.Messages.Recipients.t() | nil,
           time_stamp: String.t() | nil,
           priority: String.t() | nil,
           subject: String.t() | nil,
@@ -66,6 +64,7 @@ defmodule MM7Core.Messages.DeliverReq do
             reply_applic_id: nil,
             aux_applic_info: nil
 
+  @spec from_xml(Support.xml_node()) :: Support.result(t())
   def from_xml(root) do
     with :ok <- Support.ensure_children(root, @children),
          {:ok, mm7_version} <- Support.required_text(root, "MM7Version"),
@@ -83,6 +82,7 @@ defmodule MM7Core.Messages.DeliverReq do
     end
   end
 
+  @spec to_xml(t()) :: Support.result(String.t())
   def to_xml(%__MODULE__{} = struct) do
     with :ok <- validate(struct) do
       {:ok,
@@ -106,6 +106,7 @@ defmodule MM7Core.Messages.DeliverReq do
     end
   end
 
+  @spec validate(t() | term()) :: :ok | Support.error_result()
   def validate(%__MODULE__{} = struct) do
     missing =
       []
@@ -120,4 +121,6 @@ defmodule MM7Core.Messages.DeliverReq do
       :ok
     end
   end
+
+  def validate(_value), do: Support.error(:invalid_struct, "invalid struct")
 end

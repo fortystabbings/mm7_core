@@ -1,8 +1,6 @@
 defmodule MM7Core.Messages.SubmitReq do
   @moduledoc false
 
-  alias MM7Core.Messages.Recipients
-  alias MM7Core.Messages.SenderIdentification
   alias MM7Core.Messages.Support
 
   @children [
@@ -41,8 +39,8 @@ defmodule MM7Core.Messages.SubmitReq do
 
   @type t :: %__MODULE__{
           mm7_version: String.t() | nil,
-          sender_identification: SenderIdentification.t() | nil,
-          recipients: Recipients.t() | nil,
+          sender_identification: MM7Core.Messages.SenderIdentification.t() | nil,
+          recipients: MM7Core.Messages.Recipients.t() | nil,
           service_code: String.t() | nil,
           linked_id: String.t() | nil,
           message_class: String.t() | nil,
@@ -71,6 +69,7 @@ defmodule MM7Core.Messages.SubmitReq do
             reply_applic_id: nil,
             aux_applic_info: nil
 
+  @spec from_xml(Support.xml_node()) :: Support.result(t())
   def from_xml(root) do
     with :ok <- Support.ensure_children(root, @children),
          {:ok, mm7_version} <- Support.required_text(root, "MM7Version"),
@@ -88,6 +87,7 @@ defmodule MM7Core.Messages.SubmitReq do
     end
   end
 
+  @spec to_xml(t()) :: Support.result(String.t())
   def to_xml(%__MODULE__{} = struct) do
     with :ok <- validate(struct) do
       {:ok,
@@ -112,6 +112,7 @@ defmodule MM7Core.Messages.SubmitReq do
     end
   end
 
+  @spec validate(t() | term()) :: :ok | Support.error_result()
   def validate(%__MODULE__{} = struct) do
     missing =
       []

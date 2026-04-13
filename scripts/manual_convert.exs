@@ -3,15 +3,19 @@ samples_in = Path.join(root, "samples/in")
 samples_out = Path.join(root, "samples/out")
 
 unless Code.ensure_loaded?(MM7Core) do
-  message_files =
+  message_module_files =
     Path.wildcard(Path.join(root, "lib/mm7_core/messages/*.ex"))
     |> Enum.sort()
     |> Enum.reject(&String.ends_with?(&1, "/support.ex"))
+    |> Enum.reject(&String.ends_with?(&1, "/shared_structs.ex"))
 
-  ["lib/mm7_core/messages.ex", "lib/mm7_core/messages/support.ex"]
-  |> Kernel.++(message_files)
-  |> Kernel.++(["lib/mm7_core.ex"])
-  |> Enum.each(&Code.require_file(&1, root))
+  code_files =
+    [
+      "lib/mm7_core/messages/shared_structs.ex",
+      "lib/mm7_core/messages/support.ex"
+    ] ++ message_module_files ++ ["lib/mm7_core.ex"]
+
+  Enum.each(code_files, &Code.require_file(&1, root))
 end
 
 in_files =
