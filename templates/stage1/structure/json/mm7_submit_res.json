@@ -1,5 +1,7 @@
 {
-  "__note": "Stage-1 структура SubmitRsp. status.status_code обязателен.",
+  "__note": "Нормализованная stage-1 структура для mm7_submit_res.",
+  "__note_required": "Обязательные поля: kind, mm7_version, status.status_code.",
+  "__note_policy": "В canonical XML MessageID присутствует, но stage-1 validation floor не делает message_id обязательным.",
   "kind": "mm7_submit_res",
   "mm7_version": "<required:string>",
   "status": {
@@ -7,5 +9,5 @@
     "status_text": "<optional:string>",
     "details": "<optional:string>"
   },
-  "message_id": "<conditionally_required:string:for success-case>"
+  "message_id": "<optional:string>"
 }

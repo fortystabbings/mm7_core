@@ -1,8 +1,21 @@
 <DeliverReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
   <MM7Version>6.8.0</MM7Version>
+  <MMSRelayServerID>relay-1.mms.example</MMSRelayServerID>
+  <VASPID>TNN</VASPID>
+  <VASID>Reminder</VASID>
+  <LinkedID>wthr8391</LinkedID>
   <Sender>
-    <RFC2822Address>sender@relay.example</RFC2822Address>
+    <RFC2822Address>97254265781@omms.com</RFC2822Address>
   </Sender>
-  <Subject>Stage-1 DeliverReq sample</Subject>
-  <Content href="https://example.com/mm/content/deliver-1"/>
+  <Recipients>
+    <To>
+      <ShortCode>7255</ShortCode>
+    </To>
+  </Recipients>
+  <TimeStamp>2026-04-13T14:35:21+03:00</TimeStamp>
+  <Priority>Normal</Priority>
+  <Subject>Weather Forecast</Subject>
+  <ApplicID>ifx.com.neon.weather</ApplicID>
+  <ReplyApplicID>ifx.com.neon.weather.reply</ReplyApplicID>
+  <AuxApplicInfo>city=moscow</AuxApplicInfo>
 </DeliverReq>

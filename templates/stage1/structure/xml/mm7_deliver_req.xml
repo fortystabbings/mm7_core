@@ -1,23 +1,54 @@
 <DeliverReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
-  <!-- required -->
+  <!-- 1. required -->
   <MM7Version>{{required_mm7_version}}</MM7Version>
+  <!-- 2..5 optional -->
+  <MMSRelayServerID>{{optional_mms_relay_server_id}}</MMSRelayServerID>
+  <VASPID>{{optional_vasp_id}}</VASPID>
+  <VASID>{{optional_vas_id}}</VASID>
+  <LinkedID>{{optional_linked_id}}</LinkedID>
 
-  <!-- required -->
+  <!-- 6. required -->
   <Sender>
     <!-- one of: RFC2822Address | Number | ShortCode -->
     <RFC2822Address>{{required_sender_address}}</RFC2822Address>
   </Sender>
 
+  <!-- 7. optional repeated recipients -->
   <Recipients>
     <To>
       <Number>{{optional_recipient_number}}</Number>
     </To>
+    <Cc>
+      <RFC2822Address>{{optional_cc_rfc2822}}</RFC2822Address>
+    </Cc>
+    <Bcc>
+      <ShortCode>{{optional_bcc_short_code}}</ShortCode>
+    </Bcc>
   </Recipients>
 
+  <!-- 8..20 canonical order from XSD -->
+  <Previouslysentby>
+    <UserAgent sequence="{{optional_sequence}}">
+      <Number>{{optional_user_agent_number}}</Number>
+    </UserAgent>
+  </Previouslysentby>
+  <Previouslysentdateandtime>
+    <DateTime sequence="{{optional_sequence}}">{{optional_date_time}}</DateTime>
+  </Previouslysentdateandtime>
+  <SenderSPI>{{optional_sender_spi}}</SenderSPI>
+  <RecipientSPI>{{optional_recipient_spi}}</RecipientSPI>
+  <TimeStamp>{{optional_time_stamp}}</TimeStamp>
+  <ReplyChargingID>{{optional_reply_charging_id}}</ReplyChargingID>
+  <Priority>{{optional_priority}}</Priority>
   <Subject>{{optional_subject}}</Subject>
-  <Content href="{{optional_href_not_cid}}" allowAdaptations="{{optional_true_or_false}}"/>
+  <ApplicID>{{optional_applic_id}}</ApplicID>
+  <ReplyApplicID>{{optional_reply_applic_id}}</ReplyApplicID>
+  <AuxApplicInfo>{{optional_aux_applic_info}}</AuxApplicInfo>
+  <UACapabilities UAProf="{{optional_uaprof}}" TimeStamp="{{optional_uacapabilities_timestamp}}"/>
+  <Content href="{{optional_any_uri_or_cid}}" allowAdaptations="{{optional_true_or_false}}"/>
 
-  <!-- stage-1: unsupported and rejected if present -->
-  <!-- <Previouslysentby>...</Previouslysentby> -->
-  <!-- <Previouslysentdateandtime>...</Previouslysentdateandtime> -->
+  <!-- Stage-1 runtime practical subset:
+       MMSRelayServerID, VASPID, VASID, LinkedID, Recipients,
+       TimeStamp, Priority, Subject, ApplicID, ReplyApplicID, AuxApplicInfo.
+       Остальные optional поля в runtime отложены. -->
 </DeliverReq>

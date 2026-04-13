@@ -1,8 +1,8 @@
 <SubmitReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
-  <!-- required -->
+  <!-- 1. required -->
   <MM7Version>{{required_mm7_version}}</MM7Version>
 
-  <!-- required container -->
+  <!-- 2. required container (внутренние поля optional) -->
   <SenderIdentification>
     <VASPID>{{optional_vasp_id}}</VASPID>
     <VASID>{{optional_vas_id}}</VASID>
@@ -12,14 +12,46 @@
     </SenderAddress>
   </SenderIdentification>
 
-  <!-- required container with at least one address in To/Cc/Bcc -->
+  <!-- 3. required container with at least one address in To/Cc/Bcc -->
   <Recipients>
     <To>
       <Number>{{required_recipient_number}}</Number>
     </To>
+    <Cc>
+      <RFC2822Address>{{optional_cc_rfc2822}}</RFC2822Address>
+    </Cc>
+    <Bcc>
+      <ShortCode>{{optional_bcc_short_code}}</ShortCode>
+    </Bcc>
   </Recipients>
 
+  <!-- 4..24 canonical order from XSD (all optional for structure view) -->
+  <ServiceCode>{{optional_service_code}}</ServiceCode>
+  <LinkedID>{{optional_linked_id}}</LinkedID>
+  <MessageClass>{{optional_message_class}}</MessageClass>
+  <TimeStamp>{{optional_time_stamp}}</TimeStamp>
+  <ReplyCharging replyChargingSize="{{optional_positive_integer}}" replyDeadline="{{optional_relative_or_absolute_datetime}}"/>
+  <EarliestDeliveryTime>{{optional_earliest_delivery_time}}</EarliestDeliveryTime>
+  <ExpiryDate>{{optional_expiry_date}}</ExpiryDate>
   <DeliveryReport>{{optional_true_or_false}}</DeliveryReport>
+  <ReadReply>{{optional_true_or_false}}</ReadReply>
+  <Priority>{{optional_priority}}</Priority>
   <Subject>{{optional_subject}}</Subject>
-  <Content href="{{optional_href_not_cid}}" allowAdaptations="{{optional_true_or_false}}"/>
+  <ChargedParty>{{optional_charged_party}}</ChargedParty>
+  <ChargedPartyID>{{optional_charged_party_id}}</ChargedPartyID>
+  <DistributionIndicator>{{optional_true_or_false}}</DistributionIndicator>
+  <DeliveryCondition>
+    <DC>{{optional_delivery_condition_code}}</DC>
+  </DeliveryCondition>
+  <ApplicID>{{optional_applic_id}}</ApplicID>
+  <ReplyApplicID>{{optional_reply_applic_id}}</ReplyApplicID>
+  <AuxApplicInfo>{{optional_aux_applic_info}}</AuxApplicInfo>
+  <ContentClass>{{optional_content_class}}</ContentClass>
+  <DRMContent>{{optional_true_or_false}}</DRMContent>
+  <Content href="{{optional_any_uri_or_cid}}" allowAdaptations="{{optional_true_or_false}}"/>
+
+  <!-- Stage-1 runtime practical subset:
+       SenderIdentification, ServiceCode, LinkedID, MessageClass, TimeStamp,
+       DeliveryReport, ReadReply, Priority, Subject, ApplicID, ReplyApplicID, AuxApplicInfo.
+       Остальные optional поля в runtime отложены. -->
 </SubmitReq>

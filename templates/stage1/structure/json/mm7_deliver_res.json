@@ -1,5 +1,6 @@
 {
-  "__note": "Stage-1 структура DeliverRsp. status.status_code обязателен.",
+  "__note": "Нормализованная stage-1 структура для mm7_deliver_res.",
+  "__note_required": "Обязательные поля: kind, mm7_version, status.status_code.",
   "kind": "mm7_deliver_res",
   "mm7_version": "<required:string>",
   "status": {

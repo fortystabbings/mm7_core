@@ -1,14 +1,16 @@
 <SubmitRsp xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
-  <!-- required -->
+  <!-- 1. required -->
   <MM7Version>{{required_mm7_version}}</MM7Version>
 
-  <!-- required -->
+  <!-- 2. required container -->
   <Status>
     <StatusCode>{{required_positive_integer}}</StatusCode>
-    <StatusText>{{optional_status_text}}</StatusText>
+    <!-- required by XSD -->
+    <StatusText>{{required_status_text_by_xsd}}</StatusText>
+    <!-- optional -->
     <Details>{{optional_details}}</Details>
   </Status>
 
-  <!-- conditionally required in success-case policy -->
-  <MessageID>{{optional_or_required_by_policy}}</MessageID>
+  <!-- 3. required by XSD; в stage-1 validation floor допускается как optional -->
+  <MessageID>{{required_by_xsd_optional_in_stage1_policy}}</MessageID>
 </SubmitRsp>

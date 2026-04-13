@@ -3,16 +3,24 @@
   <SenderIdentification>
     <VASPID>acme_vasp</VASPID>
     <VASID>promo_service</VASID>
-    <SenderAddress>
-      <RFC2822Address>sender@acme.example</RFC2822Address>
-    </SenderAddress>
   </SenderIdentification>
   <Recipients>
     <To>
       <Number>79001234567</Number>
     </To>
+    <Cc>
+      <RFC2822Address>ops@example.net</RFC2822Address>
+    </Cc>
   </Recipients>
+  <ServiceCode>gold-sp33-im42</ServiceCode>
+  <LinkedID>mms00016666</LinkedID>
+  <MessageClass>Informational</MessageClass>
+  <TimeStamp>2026-04-13T09:30:47+03:00</TimeStamp>
   <DeliveryReport>true</DeliveryReport>
-  <Subject>Stage-1 SubmitReq sample</Subject>
-  <Content href="https://example.com/mm/content/123" allowAdaptations="true"/>
+  <ReadReply>false</ReadReply>
+  <Priority>Normal</Priority>
+  <Subject>Daily promo</Subject>
+  <ApplicID>ifx.com.neon.MyPackage.MAFIA</ApplicID>
+  <ReplyApplicID>ifx.com.neon.downloadedPackage.MAFIA</ReplyApplicID>
+  <AuxApplicInfo>session.ABC.DEF</AuxApplicInfo>
 </SubmitReq>

@@ -3,6 +3,7 @@
   <Status>
     <StatusCode>1000</StatusCode>
     <StatusText>Success</StatusText>
+    <Details>Accepted by VASP</Details>
   </Status>
   <ServiceCode>svc-01</ServiceCode>
 </DeliverRsp>

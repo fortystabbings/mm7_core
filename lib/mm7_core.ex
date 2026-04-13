@@ -1,16 +1,6 @@
 defmodule MM7Core do
   @moduledoc """
   Минимальный stage-1 конвертер MM7 body-level сообщений.
-
-  Поддерживаемые kind:
-  - mm7_submit_req
-  - mm7_submit_res
-  - mm7_deliver_req
-  - mm7_deliver_res
-
-  Scope stage-1:
-  - Только XML внутри SOAP Envelope.Body
-  - Без SOAP header/envelope, MIME и href:cid обработки
   """
 
   @canonical_ns "http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4"
@@ -23,9 +13,8 @@ defmodule MM7Core do
   }
 
   @kind_to_root Map.new(@root_to_kind, fn {root, kind} -> {kind, root} end)
-  @unsupported_stage_keys ["soap_envelope", "soap_header", "mime"]
 
-  @submit_req_order [
+  @submit_req_children [
     "MM7Version",
     "SenderIdentification",
     "Recipients",
@@ -33,28 +22,18 @@ defmodule MM7Core do
     "LinkedID",
     "MessageClass",
     "TimeStamp",
-    "ReplyCharging",
-    "EarliestDeliveryTime",
-    "ExpiryDate",
     "DeliveryReport",
     "ReadReply",
     "Priority",
     "Subject",
-    "ChargedParty",
-    "ChargedPartyID",
-    "DistributionIndicator",
-    "DeliveryCondition",
     "ApplicID",
     "ReplyApplicID",
-    "AuxApplicInfo",
-    "ContentClass",
-    "DRMContent",
-    "Content"
+    "AuxApplicInfo"
   ]
 
-  @submit_rsp_order ["MM7Version", "Status", "MessageID"]
+  @submit_res_children ["MM7Version", "Status", "MessageID"]
 
-  @deliver_req_order [
+  @deliver_req_children [
     "MM7Version",
     "MMSRelayServerID",
     "VASPID",
@@ -62,28 +41,65 @@ defmodule MM7Core do
     "LinkedID",
     "Sender",
     "Recipients",
-    "Previouslysentby",
-    "Previouslysentdateandtime",
-    "SenderSPI",
-    "RecipientSPI",
     "TimeStamp",
-    "ReplyChargingID",
     "Priority",
     "Subject",
     "ApplicID",
     "ReplyApplicID",
-    "AuxApplicInfo",
-    "UACapabilities",
-    "Content"
+    "AuxApplicInfo"
   ]
 
-  @deliver_rsp_order ["MM7Version", "Status", "ServiceCode"]
+  @deliver_res_children ["MM7Version", "Status", "ServiceCode"]
+
+  @submit_req_optional_fields [
+    {:text, "service_code", "ServiceCode"},
+    {:text, "linked_id", "LinkedID"},
+    {:text, "message_class", "MessageClass"},
+    {:text, "time_stamp", "TimeStamp"},
+    {:bool, "delivery_report", "DeliveryReport"},
+    {:bool, "read_reply", "ReadReply"},
+    {:text, "priority", "Priority"},
+    {:text, "subject", "Subject"},
+    {:text, "applic_id", "ApplicID"},
+    {:text, "reply_applic_id", "ReplyApplicID"},
+    {:text, "aux_applic_info", "AuxApplicInfo"}
+  ]
+
+  @submit_req_text_fields for {:text, key, _element_name} <- @submit_req_optional_fields, do: key
+  @submit_req_bool_fields for {:bool, key, _element_name} <- @submit_req_optional_fields, do: key
+
+  @deliver_req_optional_fields [
+    {:text, "mms_relay_server_id", "MMSRelayServerID"},
+    {:text, "vasp_id", "VASPID"},
+    {:text, "vas_id", "VASID"},
+    {:text, "linked_id", "LinkedID"},
+    {:text, "time_stamp", "TimeStamp"},
+    {:text, "priority", "Priority"},
+    {:text, "subject", "Subject"},
+    {:text, "applic_id", "ApplicID"},
+    {:text, "reply_applic_id", "ReplyApplicID"},
+    {:text, "aux_applic_info", "AuxApplicInfo"}
+  ]
+
+  @deliver_req_text_fields for {:text, key, _element_name} <- @deliver_req_optional_fields,
+                               do: key
+  @sender_identification_optional_fields [
+    {:text, "vasp_id", "VASPID"},
+    {:text, "vas_id", "VASID"}
+  ]
+
+  @address_tags %{
+    "RFC2822Address" => "rfc2822_address",
+    "Number" => "number",
+    "ShortCode" => "short_code"
+  }
+
+  @address_kinds Map.values(@address_tags)
+  @address_kind_to_tag Map.new(@address_tags, fn {tag, kind} -> {kind, tag} end)
+  @stage_feature_keys ~w(soap_envelope soap_header mime)
 
   @doc """
-  Унифицированный conversion API.
-
-  - XML body string -> {:ok, map}
-  - JSON string/map with kind -> {:ok, xml_body}
+  Унифицированный stage-1 API.
   """
   def convert(input, opts \\ [])
 
@@ -106,7 +122,9 @@ defmodule MM7Core do
   end
 
   def convert(input, _opts) when is_map(input) do
-    input |> stringify_keys() |> map_to_xml()
+    input
+    |> stringify_keys()
+    |> map_to_xml()
   end
 
   def convert(_input, _opts) do
@@ -115,92 +133,156 @@ defmodule MM7Core do
 
   defp json_to_xml(json) do
     case Jason.decode(json) do
-      {:ok, decoded} when is_map(decoded) -> map_to_xml(decoded)
-      {:ok, _} -> error(:invalid_json, "json root must be an object")
+      {:ok, map} when is_map(map) -> map_to_xml(map)
+      {:ok, _other} -> error(:invalid_json, "json root must be an object")
       {:error, reason} -> error(:invalid_json, "invalid json", %{reason: inspect(reason)})
     end
   end
 
   defp map_to_xml(map) do
-    with :ok <- reject_unsupported_stage_keys(map),
+    with :ok <- reject_stage_feature_keys(map),
+         :ok <- reject_mime_map(map),
          {:ok, kind} <- fetch_kind(map),
+         :ok <- ensure_allowed_map(kind, map),
+         :ok <- validate_mandatory(kind, map),
          {:ok, xml} <- encode_kind(kind, map) do
       {:ok, xml}
-    end
-  end
-
-  defp fetch_kind(map) do
-    case Map.get(map, "kind") do
-      nil ->
-        error(:missing_kind, "missing kind")
-
-      kind when is_binary(kind) ->
-        if Map.has_key?(@kind_to_root, kind) do
-          {:ok, kind}
-        else
-          error(:unknown_kind, "unknown kind", %{kind: kind})
-        end
-
-      kind ->
-        error(:unknown_kind, "unknown kind", %{kind: kind})
-    end
-  end
-
-  defp reject_unsupported_stage_keys(map) do
-    case Enum.find(@unsupported_stage_keys, &Map.has_key?(map, &1)) do
-      nil -> :ok
-      key -> error(:unsupported_stage_feature, "unsupported stage feature", %{feature: key})
     end
   end
 
   defp xml_to_map(xml) do
     with :ok <- reject_soap_envelope(xml),
          :ok <- reject_soap_header(xml),
-         :ok <- reject_mime_tokens(xml),
-         :ok <- reject_dtd_entities(xml),
-         {:ok, root} <- parse_xml_root(xml),
-         {:ok, kind} <- detect_kind(root),
-         :ok <- validate_namespace(root),
-         {:ok, decoded} <- decode_kind(kind, root),
-         :ok <- reject_mime_marker(decoded),
-         :ok <- validate_mandatory(kind, decoded) do
-      {:ok, Map.put(decoded, "kind", kind)}
+         :ok <- reject_mime_payload(xml),
+         :ok <- reject_dtd(xml),
+         {:ok, root} <- parse_xml(xml),
+         {:ok, kind} <- detect_kind(root.name),
+         :ok <- validate_namespace(root.ns),
+         {:ok, map} <- decode_kind(kind, root),
+         :ok <- validate_mandatory(kind, map) do
+      {:ok, Map.put(map, "kind", kind)}
     end
   end
 
-  defp parse_xml_root(xml) do
+  defp parse_xml(xml) do
+    initial = %{stack: [], root: nil}
+
     try do
-      {doc, _rest} = :xmerl_scan.string(String.to_charlist(xml), quiet: true)
-      {:ok, doc}
+      result =
+        :xmerl_sax_parser.stream(String.to_charlist(xml),
+          event_fun: fn event, line, acc -> sax_event(event, line, acc) end,
+          event_state: initial
+        )
+
+      case result do
+        {:ok, %{root: nil}, _rest} ->
+          error(:invalid_xml, "invalid xml")
+
+        {:ok, %{root: root}, rest} ->
+          ensure_no_trailing_input(root, rest)
+
+        {:fatal_error, reason} ->
+          error(:invalid_xml, "invalid xml", %{reason: inspect(reason)})
+
+        {:fatal_error, reason, _line, _event, _state} ->
+          error(:invalid_xml, "invalid xml", %{reason: inspect(reason)})
+
+        other ->
+          error(:invalid_xml, "invalid xml", %{reason: inspect(other)})
+      end
     catch
-      :exit, reason -> error(:invalid_xml, "invalid xml", %{reason: inspect(reason)})
+      :throw, {:error, _} = err ->
+        err
+
+      :exit, reason ->
+        error(:invalid_xml, "invalid xml", %{reason: inspect(reason)})
     end
   end
 
-  defp detect_kind(root) do
-    name = x_name(root) |> Atom.to_string()
+  defp sax_event(:startDocument, _line, state), do: state
+  defp sax_event(:endDocument, _line, state), do: state
+  defp sax_event({:startPrefixMapping, _, _}, _line, state), do: state
+  defp sax_event({:endPrefixMapping, _}, _line, state), do: state
 
-    case Map.get(@root_to_kind, name) do
-      nil -> error(:unknown_xml_root, "unknown xml root", %{root: name})
+  defp sax_event({:characters, chars}, _line, %{stack: [node | rest]} = state) do
+    text = IO.chardata_to_string(chars)
+    %{state | stack: [%{node | text: [text | node.text]} | rest]}
+  end
+
+  defp sax_event({:characters, chars}, _line, %{stack: []} = state) do
+    if chars |> IO.chardata_to_string() |> String.trim() == "" do
+      state
+    else
+      throw(error(:invalid_xml, "unexpected text outside root"))
+    end
+  end
+
+  defp sax_event({:ignorableWhitespace, _chars}, _line, state), do: state
+
+  defp sax_event({:startElement, _uri, _local_name, _qname, _attrs}, _line, %{
+         stack: [],
+         root: root
+       })
+       when not is_nil(root) do
+    throw(error(:invalid_xml, "multiple root elements are not allowed"))
+  end
+
+  defp sax_event({:startElement, uri, local_name, _qname, attrs}, _line, state) do
+    node = %{
+      name: IO.chardata_to_string(local_name),
+      ns: IO.chardata_to_string(uri),
+      attrs: attrs_to_map(attrs),
+      children: [],
+      text: []
+    }
+
+    %{state | stack: [node | state.stack]}
+  end
+
+  defp sax_event({:endElement, _uri, _local_name, _qname}, _line, %{stack: [node | rest]} = state) do
+    normalized = %{
+      node
+      | children: Enum.reverse(node.children),
+        text: node.text |> Enum.reverse() |> IO.iodata_to_binary()
+    }
+
+    case rest do
+      [] ->
+        %{state | stack: [], root: normalized}
+
+      [parent | tail] ->
+        parent = %{parent | children: [normalized | parent.children]}
+        %{state | stack: [parent | tail]}
+    end
+  end
+
+  defp attrs_to_map(attrs) do
+    Map.new(attrs, fn {_, _, name, value} ->
+      {IO.chardata_to_string(name), IO.chardata_to_string(value)}
+    end)
+  end
+
+  defp detect_kind(root_name) do
+    case @root_to_kind[root_name] do
+      nil -> error(:unknown_xml_root, "unknown xml root", %{root: root_name})
       kind -> {:ok, kind}
     end
   end
 
-  defp validate_namespace(root) do
-    attrs = x_attrs(root)
+  defp validate_namespace(@canonical_ns), do: :ok
 
-    ns =
-      Enum.find_value(attrs, fn attr ->
-        case a_name(attr) do
-          :xmlns -> to_string(a_value(attr))
-          _ -> nil
-        end
-      end)
+  defp validate_namespace(namespace) do
+    error(:invalid_structure, "namespace mismatch", %{
+      namespace: namespace,
+      expected: @canonical_ns
+    })
+  end
 
-    if ns == @canonical_ns do
-      :ok
+  defp ensure_no_trailing_input(root, rest) do
+    if rest |> IO.chardata_to_string() |> String.trim() == "" do
+      {:ok, root}
     else
-      error(:invalid_structure, "namespace mismatch", %{namespace: ns, expected: @canonical_ns})
+      error(:invalid_xml, "multiple root elements are not allowed")
     end
   end
 
@@ -220,17 +302,19 @@ defmodule MM7Core do
     end
   end
 
-  defp reject_mime_tokens(xml) do
+  defp reject_mime_payload(xml) do
     down = String.downcase(xml)
 
-    if String.contains?(down, "multipart/") or String.contains?(down, "content-type:") do
+    if String.contains?(down, "multipart/") or String.contains?(down, "content-type:") or
+         String.contains?(down, "content-id:") or String.contains?(down, "cid:") or
+         Regex.match?(~r/<\s*Content\b/i, xml) do
       error(:unsupported_stage_feature, "unsupported stage feature", %{feature: "mime"})
     else
       :ok
     end
   end
 
-  defp reject_dtd_entities(xml) do
+  defp reject_dtd(xml) do
     if Regex.match?(~r/<!\s*(DOCTYPE|ENTITY)/i, xml) do
       error(:invalid_xml, "doctype/entity is not allowed")
     else
@@ -238,11 +322,40 @@ defmodule MM7Core do
     end
   end
 
-  defp reject_mime_marker(%{"_mime_rejected" => true}) do
-    error(:unsupported_stage_feature, "unsupported stage feature", %{feature: "mime"})
+  defp reject_stage_feature_keys(map) do
+    case Enum.find(@stage_feature_keys, &Map.has_key?(map, &1)) do
+      nil ->
+        :ok
+
+      feature ->
+        error(:unsupported_stage_feature, "unsupported stage feature", %{feature: feature})
+    end
   end
 
-  defp reject_mime_marker(_), do: :ok
+  defp reject_mime_map(map) do
+    if Map.has_key?(map, "content") do
+      error(:unsupported_stage_feature, "unsupported stage feature", %{feature: "mime"})
+    else
+      :ok
+    end
+  end
+
+  defp fetch_kind(map) do
+    case map["kind"] do
+      nil ->
+        error(:missing_kind, "missing kind")
+
+      kind when is_binary(kind) ->
+        if Map.has_key?(@kind_to_root, kind) do
+          {:ok, kind}
+        else
+          error(:unknown_kind, "unknown kind", %{kind: kind})
+        end
+
+      kind ->
+        error(:unknown_kind, "unknown kind", %{kind: kind})
+    end
+  end
 
   defp decode_kind("mm7_submit_req", root), do: decode_submit_req(root)
   defp decode_kind("mm7_submit_res", root), do: decode_submit_res(root)
@@ -255,257 +368,567 @@ defmodule MM7Core do
   defp encode_kind("mm7_deliver_res", map), do: encode_deliver_res(map)
 
   defp decode_submit_req(root) do
-    with :ok <- ensure_only_children(root, @submit_req_order),
+    with :ok <- ensure_children(root, @submit_req_children),
          {:ok, mm7_version} <- required_text(root, "MM7Version"),
-         {:ok, sender_identification} <- decode_sender_identification(root),
-         {:ok, recipients} <- decode_recipients(root, "Recipients") do
-      base = %{
-        "mm7_version" => mm7_version,
-        "sender_identification" => sender_identification,
-        "recipients" => recipients
-      }
-
-      optional =
-        base
-        |> maybe_put_text(root, "service_code", "ServiceCode")
-        |> maybe_put_text(root, "linked_id", "LinkedID")
-        |> maybe_put_text(root, "message_class", "MessageClass")
-        |> maybe_put_text(root, "time_stamp", "TimeStamp")
-        |> maybe_put_reply_charging(root)
-        |> maybe_put_text(root, "earliest_delivery_time", "EarliestDeliveryTime")
-        |> maybe_put_text(root, "expiry_date", "ExpiryDate")
-        |> maybe_put_bool(root, "delivery_report", "DeliveryReport")
-        |> maybe_put_bool(root, "read_reply", "ReadReply")
-        |> maybe_put_text(root, "priority", "Priority")
-        |> maybe_put_text(root, "subject", "Subject")
-        |> maybe_put_text(root, "charged_party", "ChargedParty")
-        |> maybe_put_text(root, "charged_party_id", "ChargedPartyID")
-        |> maybe_put_bool(root, "distribution_indicator", "DistributionIndicator")
-        |> maybe_put_delivery_condition(root)
-        |> maybe_put_text(root, "applic_id", "ApplicID")
-        |> maybe_put_text(root, "reply_applic_id", "ReplyApplicID")
-        |> maybe_put_text(root, "aux_applic_info", "AuxApplicInfo")
-        |> maybe_put_text(root, "content_class", "ContentClass")
-        |> maybe_put_bool(root, "drm_content", "DRMContent")
-        |> maybe_put_content(root)
-
-      {:ok, optional}
+         {:ok, recipients} <- required_recipients(root),
+         {:ok, sender_identification} <- optional_sender_identification(root),
+         {:ok, optional_fields} <- collect_optional_fields(root, @submit_req_optional_fields) do
+      {:ok,
+       %{}
+       |> Map.put("mm7_version", mm7_version)
+       |> maybe_put("sender_identification", sender_identification)
+       |> Map.put("recipients", recipients)
+       |> Map.merge(optional_fields)}
     end
   end
 
   defp decode_submit_res(root) do
-    with :ok <- ensure_only_children(root, @submit_rsp_order),
+    with :ok <- ensure_children(root, @submit_res_children),
          {:ok, mm7_version} <- required_text(root, "MM7Version"),
          {:ok, status} <- decode_status(root),
          {:ok, message_id} <- optional_text(root, "MessageID") do
-      map = %{"mm7_version" => mm7_version, "status" => status}
-      {:ok, maybe_put(map, "message_id", message_id)}
+      {:ok,
+       %{}
+       |> Map.put("mm7_version", mm7_version)
+       |> Map.put("status", status)
+       |> maybe_put("message_id", message_id)}
     end
   end
 
   defp decode_deliver_req(root) do
-    with :ok <- ensure_only_children(root, @deliver_req_order),
+    with :ok <- ensure_children(root, @deliver_req_children),
          {:ok, mm7_version} <- required_text(root, "MM7Version"),
-         {:ok, sender} <- required_address(root, "Sender") do
-      base = %{"mm7_version" => mm7_version, "sender" => sender}
-
-      decoded =
-        base
-        |> maybe_put_text(root, "mms_relay_server_id", "MMSRelayServerID")
-        |> maybe_put_text(root, "vasp_id", "VASPID")
-        |> maybe_put_text(root, "vas_id", "VASID")
-        |> maybe_put_text(root, "linked_id", "LinkedID")
-        |> maybe_put_recipients(root)
-        |> maybe_put_text(root, "sender_spi", "SenderSPI")
-        |> maybe_put_text(root, "recipient_spi", "RecipientSPI")
-        |> maybe_put_text(root, "time_stamp", "TimeStamp")
-        |> maybe_put_text(root, "reply_charging_id", "ReplyChargingID")
-        |> maybe_put_text(root, "priority", "Priority")
-        |> maybe_put_text(root, "subject", "Subject")
-        |> maybe_put_text(root, "applic_id", "ApplicID")
-        |> maybe_put_text(root, "reply_applic_id", "ReplyApplicID")
-        |> maybe_put_text(root, "aux_applic_info", "AuxApplicInfo")
-        |> maybe_put_uacapabilities(root)
-        |> maybe_put_content(root)
-
-      with :ok <- reject_if_present(root, "Previouslysentby"),
-           :ok <- reject_if_present(root, "Previouslysentdateandtime") do
-        {:ok, decoded}
-      end
+         {:ok, sender} <- required_address(root, "Sender"),
+         {:ok, recipients} <- optional_recipients(root),
+         {:ok, optional_fields} <- collect_optional_fields(root, @deliver_req_optional_fields) do
+      {:ok,
+       %{}
+       |> Map.put("mm7_version", mm7_version)
+       |> Map.put("sender", sender)
+       |> maybe_put("recipients", recipients)
+       |> Map.merge(optional_fields)}
     end
   end
 
   defp decode_deliver_res(root) do
-    with :ok <- ensure_only_children(root, @deliver_rsp_order),
+    with :ok <- ensure_children(root, @deliver_res_children),
          {:ok, mm7_version} <- required_text(root, "MM7Version"),
          {:ok, status} <- decode_status(root),
          {:ok, service_code} <- optional_text(root, "ServiceCode") do
-      map = %{"mm7_version" => mm7_version, "status" => status}
-      {:ok, maybe_put(map, "service_code", service_code)}
+      {:ok,
+       %{}
+       |> Map.put("mm7_version", mm7_version)
+       |> Map.put("status", status)
+       |> maybe_put("service_code", service_code)}
     end
   end
 
-  defp encode_submit_req(map) do
-    with :ok <- validate_mandatory("mm7_submit_req", map),
-         {:ok, mm7_version} <- fetch_string(map, "mm7_version"),
-         {:ok, recipients} <- fetch_recipients(map) do
-      sender_identification = encode_sender_identification(map)
+  defp ensure_children(node, allowed, opts \\ []) do
+    ordered? = Keyword.get(opts, :ordered, true)
+    names = Enum.map(element_children(node), & &1.name)
+    unknown = Enum.reject(names, &(&1 in allowed))
 
-      xml = [
-        "<SubmitReq xmlns=\"",
-        @canonical_ns,
-        "\">",
-        tag("MM7Version", mm7_version),
-        sender_identification,
-        encode_recipients(recipients),
-        encode_optional_submit_req(map),
-        "</SubmitReq>"
-      ]
+    cond do
+      unknown != [] ->
+        error(:invalid_structure, "unexpected child elements", %{unknown: unknown})
 
-      {:ok, IO.iodata_to_binary(xml)}
+      ordered? and not ordered_names?(names, allowed) ->
+        error(:invalid_structure, "unexpected child order", %{children: names})
+
+      true ->
+        :ok
     end
   end
 
-  defp encode_submit_res(map) do
-    with :ok <- validate_mandatory("mm7_submit_res", map),
-         {:ok, mm7_version} <- fetch_string(map, "mm7_version"),
-         {:ok, status} <- fetch_status(map),
-         {:ok, message_id} <- maybe_required_submit_message_id(map, status) do
-      xml = [
-        "<SubmitRsp xmlns=\"",
-        @canonical_ns,
-        "\">",
-        tag("MM7Version", mm7_version),
-        encode_status(status),
-        maybe_tag("MessageID", message_id),
-        "</SubmitRsp>"
-      ]
+  defp ordered_names?(names, allowed) do
+    {ordered?, _last_index} =
+      Enum.reduce_while(names, {true, -1}, fn name, {_ok?, last} ->
+        index = Enum.find_index(allowed, &(&1 == name))
 
-      {:ok, IO.iodata_to_binary(xml)}
+        if index >= last do
+          {:cont, {true, index}}
+        else
+          {:halt, {false, last}}
+        end
+      end)
+
+    ordered?
+  end
+
+  defp required_text(node, name) do
+    case optional_text(node, name) do
+      {:ok, nil} -> error(:invalid_structure, "missing #{name}")
+      {:ok, value} -> {:ok, value}
+      {:error, _} = err -> err
     end
   end
 
-  defp encode_deliver_req(map) do
-    with :ok <- validate_mandatory("mm7_deliver_req", map),
-         {:ok, mm7_version} <- fetch_string(map, "mm7_version"),
-         {:ok, sender} <- fetch_address(map, "sender"),
-         :ok <- reject_encode_deliver_unsupported(map),
-         :ok <- reject_content_cid(map) do
-      xml = [
-        "<DeliverReq xmlns=\"",
-        @canonical_ns,
-        "\">",
-        tag("MM7Version", mm7_version),
-        maybe_tag("MMSRelayServerID", map["mms_relay_server_id"]),
-        maybe_tag("VASPID", map["vasp_id"]),
-        maybe_tag("VASID", map["vas_id"]),
-        maybe_tag("LinkedID", map["linked_id"]),
-        wrap("Sender", encode_address(sender)),
-        encode_optional_recipients(map),
-        maybe_tag("SenderSPI", map["sender_spi"]),
-        maybe_tag("RecipientSPI", map["recipient_spi"]),
-        maybe_tag("TimeStamp", map["time_stamp"]),
-        maybe_tag("ReplyChargingID", map["reply_charging_id"]),
-        maybe_tag("Priority", map["priority"]),
-        maybe_tag("Subject", map["subject"]),
-        maybe_tag("ApplicID", map["applic_id"]),
-        maybe_tag("ReplyApplicID", map["reply_applic_id"]),
-        maybe_tag("AuxApplicInfo", map["aux_applic_info"]),
-        encode_uacapabilities(map),
-        encode_optional_content(map),
-        "</DeliverReq>"
-      ]
+  defp optional_text(node, name) do
+    with {:ok, child} <- single_child(node, name) do
+      case child do
+        nil ->
+          {:ok, nil}
 
-      {:ok, IO.iodata_to_binary(xml)}
+        child ->
+          simple_text(child)
+      end
     end
   end
 
-  defp encode_deliver_res(map) do
-    with :ok <- validate_mandatory("mm7_deliver_res", map),
-         {:ok, mm7_version} <- fetch_string(map, "mm7_version"),
-         {:ok, status} <- fetch_status(map) do
-      xml = [
-        "<DeliverRsp xmlns=\"",
-        @canonical_ns,
-        "\">",
-        tag("MM7Version", mm7_version),
-        encode_status(status),
-        maybe_tag("ServiceCode", map["service_code"]),
-        "</DeliverRsp>"
-      ]
+  defp single_child(node, name) do
+    matches = Enum.filter(element_children(node), &(&1.name == name))
 
-      {:ok, IO.iodata_to_binary(xml)}
+    case matches do
+      [] -> {:ok, nil}
+      [child] -> {:ok, child}
+      _ -> error(:invalid_structure, "duplicate child element", %{element: name})
     end
+  end
+
+  defp element_children(node) do
+    Enum.filter(node.children, &is_map/1)
+  end
+
+  defp simple_text(node) do
+    if element_children(node) == [] do
+      value = String.trim(node.text)
+
+      if value == "" do
+        error(:invalid_structure, "empty value is not allowed", %{element: node.name})
+      else
+        {:ok, value}
+      end
+    else
+      error(:invalid_structure, "nested elements are not allowed", %{element: node.name})
+    end
+  end
+
+  defp collect_optional_fields(node, fields) do
+    Enum.reduce_while(fields, {:ok, %{}}, fn field, {:ok, acc} ->
+      case collect_optional_field(node, field) do
+        {:ok, nil} -> {:cont, {:ok, acc}}
+        {:ok, {key, value}} -> {:cont, {:ok, Map.put(acc, key, value)}}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+  end
+
+  defp collect_optional_field(node, {:text, key, element_name}) do
+    case optional_text(node, element_name) do
+      {:ok, nil} -> {:ok, nil}
+      {:ok, value} -> {:ok, {key, value}}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp collect_optional_field(node, {:bool, key, element_name}) do
+    with {:ok, value} <- optional_text(node, element_name),
+         {:ok, parsed} <- parse_optional_xml_bool(value, key) do
+      case parsed do
+        nil -> {:ok, nil}
+        boolean -> {:ok, {key, boolean}}
+      end
+    end
+  end
+
+  defp optional_sender_identification(root) do
+    with {:ok, node} <- single_child(root, "SenderIdentification") do
+      case node do
+        nil ->
+          {:ok, nil}
+
+        node ->
+          with :ok <- ensure_children(node, ["VASPID", "VASID", "SenderAddress"]),
+               {:ok, sender_address} <- optional_address(node, "SenderAddress"),
+               {:ok, sender_fields} <-
+                 collect_optional_fields(node, @sender_identification_optional_fields) do
+            sender_identification =
+              sender_fields
+              |> maybe_put("sender_address", sender_address)
+
+            if map_size(sender_identification) == 0 do
+              {:ok, nil}
+            else
+              {:ok, sender_identification}
+            end
+          end
+      end
+    end
+  end
+
+  defp required_recipients(root) do
+    with {:ok, node} <- single_child(root, "Recipients") do
+      case node do
+        nil -> error(:invalid_structure, "missing Recipients")
+        node -> decode_recipients_node(node)
+      end
+    end
+  end
+
+  defp optional_recipients(root) do
+    with {:ok, node} <- single_child(root, "Recipients") do
+      case node do
+        nil -> {:ok, nil}
+        node -> decode_recipients_node(node)
+      end
+    end
+  end
+
+  defp decode_recipients_node(node) do
+    with :ok <- ensure_children(node, ["To", "Cc", "Bcc"], ordered: false) do
+      Enum.reduce_while(
+        element_children(node),
+        {:ok, %{"to" => [], "cc" => [], "bcc" => []}},
+        fn child, {:ok, acc} ->
+          key =
+            case child.name do
+              "To" -> "to"
+              "Cc" -> "cc"
+              "Bcc" -> "bcc"
+            end
+
+          case decode_address_list(child) do
+            {:ok, addresses} ->
+              {:cont, {:ok, Map.update!(acc, key, &(&1 ++ addresses))}}
+
+            {:error, _} = err ->
+              {:halt, err}
+          end
+        end
+      )
+    end
+  end
+
+  defp decode_address_list(node) do
+    case Enum.reduce_while(element_children(node), {:ok, []}, fn child, {:ok, acc} ->
+           case decode_address_node(child) do
+             {:ok, address} -> {:cont, {:ok, [address | acc]}}
+             {:error, _} = err -> {:halt, err}
+           end
+         end) do
+      {:ok, addresses} -> {:ok, Enum.reverse(addresses)}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp required_address(root, name) do
+    with {:ok, node} <- single_child(root, name) do
+      case node do
+        nil -> error(:invalid_structure, "missing #{name}")
+        node -> decode_single_address(node, name)
+      end
+    end
+  end
+
+  defp optional_address(root, name) do
+    with {:ok, node} <- single_child(root, name) do
+      case node do
+        nil -> {:ok, nil}
+        node -> decode_single_address(node, name)
+      end
+    end
+  end
+
+  defp decode_single_address(node, element_name) do
+    case element_children(node) do
+      [address] -> decode_address_node(address)
+      _ -> error(:invalid_structure, "invalid address structure", %{element: element_name})
+    end
+  end
+
+  defp decode_address_node(node) do
+    kind = @address_tags[node.name]
+
+    if is_nil(kind) do
+      error(:invalid_structure, "invalid address structure", %{element: node.name})
+    else
+      with {:ok, display_only} <-
+             parse_optional_xml_bool(node.attrs["displayOnly"], "displayOnly"),
+           {:ok, address_coding} <- optional_attr(node, "addressCoding"),
+           {:ok, id} <- optional_attr(node, "id"),
+           :ok <- validate_address_coding(address_coding),
+           {:ok, value} <- simple_text(node) do
+        {:ok,
+         %{}
+         |> Map.put("kind", kind)
+         |> Map.put("value", value)
+         |> maybe_put("display_only", display_only)
+         |> maybe_put("address_coding", address_coding)
+         |> maybe_put("id", id)}
+      end
+    end
+  end
+
+  defp decode_status(root) do
+    with {:ok, node} <- single_child(root, "Status") do
+      case node do
+        nil ->
+          error(:invalid_structure, "missing Status")
+
+        node ->
+          with :ok <- ensure_children(node, ["StatusCode", "StatusText", "Details"]),
+               {:ok, status_code_text} <- required_text(node, "StatusCode"),
+               {:ok, status_code} <-
+                 parse_positive_integer(status_code_text, "status.status_code"),
+               {:ok, status_text} <- optional_text(node, "StatusText"),
+               {:ok, details} <- optional_text(node, "Details") do
+            {:ok,
+             %{}
+             |> Map.put("status_code", status_code)
+             |> maybe_put("status_text", status_text)
+             |> maybe_put("details", details)}
+          end
+      end
+    end
+  end
+
+  defp ensure_allowed_map("mm7_submit_req", map) do
+    with :ok <-
+           ensure_only_keys(map, [
+             "kind",
+             "mm7_version",
+             "sender_identification",
+             "recipients",
+             "service_code",
+             "linked_id",
+             "message_class",
+             "time_stamp",
+             "delivery_report",
+             "read_reply",
+             "priority",
+             "subject",
+             "applic_id",
+             "reply_applic_id",
+             "aux_applic_info"
+           ]),
+         :ok <- validate_string_fields(map, ["mm7_version" | @submit_req_text_fields]),
+         :ok <- validate_boolean_fields(map, @submit_req_bool_fields),
+         :ok <- validate_sender_identification(Map.get(map, "sender_identification")),
+         :ok <- validate_recipients(Map.get(map, "recipients")) do
+      :ok
+    end
+  end
+
+  defp ensure_allowed_map("mm7_submit_res", map) do
+    with :ok <- ensure_only_keys(map, ["kind", "mm7_version", "status", "message_id"]),
+         :ok <- validate_string_fields(map, ["mm7_version", "message_id"]),
+         :ok <- validate_status(Map.get(map, "status")) do
+      :ok
+    end
+  end
+
+  defp ensure_allowed_map("mm7_deliver_req", map) do
+    with :ok <-
+           ensure_only_keys(map, [
+             "kind",
+             "mm7_version",
+             "mms_relay_server_id",
+             "vasp_id",
+             "vas_id",
+             "linked_id",
+             "sender",
+             "recipients",
+             "time_stamp",
+             "priority",
+             "subject",
+             "applic_id",
+             "reply_applic_id",
+             "aux_applic_info"
+           ]),
+         :ok <- validate_string_fields(map, ["mm7_version" | @deliver_req_text_fields]),
+         :ok <- validate_address(Map.get(map, "sender")),
+         :ok <- validate_recipients(Map.get(map, "recipients")) do
+      :ok
+    end
+  end
+
+  defp ensure_allowed_map("mm7_deliver_res", map) do
+    with :ok <- ensure_only_keys(map, ["kind", "mm7_version", "status", "service_code"]),
+         :ok <- validate_string_fields(map, ["mm7_version", "service_code"]),
+         :ok <- validate_status(Map.get(map, "status")) do
+      :ok
+    end
+  end
+
+  defp ensure_only_keys(map, allowed) do
+    unknown = map |> Map.keys() |> Enum.reject(&(&1 in allowed))
+
+    if unknown == [] do
+      :ok
+    else
+      error(:invalid_structure, "unknown fields", %{fields: unknown})
+    end
+  end
+
+  defp validate_sender_identification(nil), do: :ok
+
+  defp validate_sender_identification(sender_identification) when is_map(sender_identification) do
+    with :ok <- ensure_only_keys(sender_identification, ["vasp_id", "vas_id", "sender_address"]),
+         :ok <- validate_string_fields(sender_identification, ["vasp_id", "vas_id"]),
+         :ok <- validate_address(Map.get(sender_identification, "sender_address")) do
+      :ok
+    end
+  end
+
+  defp validate_sender_identification(_value) do
+    error(:invalid_structure, "sender_identification must be object")
+  end
+
+  defp validate_status(nil), do: :ok
+
+  defp validate_status(status) when is_map(status) do
+    with :ok <- ensure_only_keys(status, ["status_code", "status_text", "details"]),
+         :ok <- validate_status_code(Map.get(status, "status_code")),
+         :ok <- validate_string_fields(status, ["status_text", "details"]) do
+      :ok
+    end
+  end
+
+  defp validate_status(_value) do
+    error(:invalid_structure, "status must be object")
+  end
+
+  defp validate_recipients(nil), do: :ok
+
+  defp validate_recipients(recipients) when is_map(recipients) do
+    with :ok <- ensure_only_keys(recipients, ["to", "cc", "bcc"]) do
+      Enum.reduce_while(["to", "cc", "bcc"], :ok, fn key, :ok ->
+        case validate_address_list(Map.get(recipients, key)) do
+          :ok -> {:cont, :ok}
+          {:error, _} = err -> {:halt, err}
+        end
+      end)
+    end
+  end
+
+  defp validate_recipients(_value) do
+    error(:invalid_structure, "recipients must be object")
+  end
+
+  defp validate_address_list(nil), do: :ok
+
+  defp validate_address_list(list) when is_list(list) do
+    Enum.reduce_while(list, :ok, fn address, :ok ->
+      case validate_address(address) do
+        :ok -> {:cont, :ok}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+  end
+
+  defp validate_address_list(_value) do
+    error(:invalid_structure, "recipient group must be list")
+  end
+
+  defp validate_address(nil), do: :ok
+
+  defp validate_address(address) when is_map(address) do
+    with :ok <-
+           ensure_only_keys(address, ["kind", "value", "display_only", "address_coding", "id"]),
+         :ok <- validate_address_kind(Map.get(address, "kind")),
+         :ok <- validate_address_value(Map.get(address, "value")),
+         :ok <- validate_boolean_fields(address, ["display_only"]),
+         :ok <- validate_string_fields(address, ["id"]),
+         :ok <- validate_address_coding(Map.get(address, "address_coding")) do
+      :ok
+    end
+  end
+
+  defp validate_address(_value) do
+    error(:invalid_structure, "address must be object")
+  end
+
+  defp validate_address_kind(nil), do: :ok
+
+  defp validate_address_kind(kind) when is_binary(kind) and kind in @address_kinds, do: :ok
+
+  defp validate_address_kind(_kind) do
+    error(:invalid_structure, "unknown address kind")
+  end
+
+  defp validate_address_value(nil), do: :ok
+
+  defp validate_address_value(value) when is_binary(value) and value != "", do: :ok
+
+  defp validate_address_value(_value) do
+    error(:invalid_structure, "address value must be non-empty string")
+  end
+
+  defp validate_status_code(nil), do: :ok
+
+  defp validate_status_code(value) do
+    case parse_positive_integer(value, "status.status_code") do
+      {:ok, _value} -> :ok
+      {:error, _} = err -> err
+    end
+  end
+
+  defp validate_address_coding(nil), do: :ok
+  defp validate_address_coding("encrypted"), do: :ok
+  defp validate_address_coding("obfuscated"), do: :ok
+
+  defp validate_address_coding(_value) do
+    error(:invalid_structure, "field must be encrypted or obfuscated", %{field: "address_coding"})
   end
 
   defp validate_mandatory("mm7_submit_req", map) do
     missing =
       []
-      |> maybe_missing(map, "mm7_version")
+      |> maybe_missing_string(map, "mm7_version")
       |> maybe_missing_recipients(map)
 
-    if missing == [] do
-      :ok
-    else
-      error(:missing_mandatory_fields, "missing mandatory fields", %{
-        kind: "mm7_submit_req",
-        fields: missing
-      })
-    end
+    missing_or_ok("mm7_submit_req", missing)
   end
 
   defp validate_mandatory("mm7_submit_res", map) do
     missing =
       []
-      |> maybe_missing(map, "mm7_version")
+      |> maybe_missing_string(map, "mm7_version")
       |> maybe_missing_status_code(map)
 
-    if missing == [] do
-      :ok
-    else
-      error(:missing_mandatory_fields, "missing mandatory fields", %{
-        kind: "mm7_submit_res",
-        fields: missing
-      })
-    end
+    missing_or_ok("mm7_submit_res", missing)
   end
 
   defp validate_mandatory("mm7_deliver_req", map) do
     missing =
       []
-      |> maybe_missing(map, "mm7_version")
-      |> maybe_missing(map, "sender")
+      |> maybe_missing_string(map, "mm7_version")
+      |> maybe_missing_address(map, "sender")
 
-    if missing == [] do
-      :ok
-    else
-      error(:missing_mandatory_fields, "missing mandatory fields", %{
-        kind: "mm7_deliver_req",
-        fields: missing
-      })
-    end
+    missing_or_ok("mm7_deliver_req", missing)
   end
 
   defp validate_mandatory("mm7_deliver_res", map) do
     missing =
       []
-      |> maybe_missing(map, "mm7_version")
+      |> maybe_missing_string(map, "mm7_version")
       |> maybe_missing_status_code(map)
 
-    if missing == [] do
-      :ok
-    else
-      error(:missing_mandatory_fields, "missing mandatory fields", %{
-        kind: "mm7_deliver_res",
-        fields: missing
-      })
+    missing_or_ok("mm7_deliver_res", missing)
+  end
+
+  defp missing_or_ok(_kind, []), do: :ok
+
+  defp missing_or_ok(kind, missing) do
+    error(:missing_mandatory_fields, "missing mandatory fields", %{kind: kind, fields: missing})
+  end
+
+  defp maybe_missing_string(list, map, key) do
+    case map[key] do
+      value when is_binary(value) and value != "" -> list
+      _ -> list ++ [key]
     end
   end
 
-  defp validate_mandatory(_kind, _map), do: :ok
+  defp maybe_missing_address(list, map, key) do
+    case map[key] do
+      %{"kind" => kind, "value" => value}
+      when kind in @address_kinds and is_binary(value) and value != "" ->
+        list
 
-  defp maybe_missing(list, map, key) do
-    if present?(map[key]), do: list, else: list ++ [key]
+      _ ->
+        list ++ [key]
+    end
   end
 
   defp maybe_missing_status_code(list, map) do
@@ -516,10 +939,11 @@ defmodule MM7Core do
   end
 
   defp maybe_missing_recipients(list, map) do
-    case map do
-      %{"recipients" => recipients} when is_map(recipients) ->
+    case map["recipients"] do
+      %{} = recipients ->
         total =
           recipients
+          |> Map.take(["to", "cc", "bcc"])
           |> Map.values()
           |> Enum.filter(&is_list/1)
           |> Enum.map(&length/1)
@@ -532,699 +956,263 @@ defmodule MM7Core do
     end
   end
 
-  defp ensure_only_children(root, allowed) do
-    unknown =
-      root
-      |> child_elements()
-      |> Enum.map(&(x_name(&1) |> Atom.to_string()))
-      |> Enum.reject(&(&1 in allowed))
+  defp encode_submit_req(map) do
+    xml = [
+      open_root("SubmitReq"),
+      tag("MM7Version", map["mm7_version"]),
+      encode_sender_identification(Map.get(map, "sender_identification")),
+      encode_recipients(Map.get(map, "recipients")),
+      maybe_tag("ServiceCode", map["service_code"]),
+      maybe_tag("LinkedID", map["linked_id"]),
+      maybe_tag("MessageClass", map["message_class"]),
+      maybe_tag("TimeStamp", map["time_stamp"]),
+      maybe_tag("DeliveryReport", bool_to_text(map["delivery_report"])),
+      maybe_tag("ReadReply", bool_to_text(map["read_reply"])),
+      maybe_tag("Priority", map["priority"]),
+      maybe_tag("Subject", map["subject"]),
+      maybe_tag("ApplicID", map["applic_id"]),
+      maybe_tag("ReplyApplicID", map["reply_applic_id"]),
+      maybe_tag("AuxApplicInfo", map["aux_applic_info"]),
+      close_root("SubmitReq")
+    ]
 
-    if unknown == [] do
-      :ok
-    else
-      error(:invalid_structure, "unexpected child elements", %{unknown: unknown})
+    {:ok, IO.iodata_to_binary(xml)}
+  end
+
+  defp encode_submit_res(map) do
+    with {:ok, status} <- encode_status(Map.get(map, "status", %{})) do
+      xml = [
+        open_root("SubmitRsp"),
+        tag("MM7Version", map["mm7_version"]),
+        status,
+        maybe_tag("MessageID", map["message_id"]),
+        close_root("SubmitRsp")
+      ]
+
+      {:ok, IO.iodata_to_binary(xml)}
     end
   end
 
-  defp decode_sender_identification(root) do
-    case find_child(root, "SenderIdentification") do
-      nil ->
-        error(:invalid_structure, "missing SenderIdentification")
+  defp encode_deliver_req(map) do
+    xml = [
+      open_root("DeliverReq"),
+      tag("MM7Version", map["mm7_version"]),
+      maybe_tag("MMSRelayServerID", map["mms_relay_server_id"]),
+      maybe_tag("VASPID", map["vasp_id"]),
+      maybe_tag("VASID", map["vas_id"]),
+      maybe_tag("LinkedID", map["linked_id"]),
+      wrap("Sender", encode_address(map["sender"])),
+      encode_optional_recipients(map["recipients"]),
+      maybe_tag("TimeStamp", map["time_stamp"]),
+      maybe_tag("Priority", map["priority"]),
+      maybe_tag("Subject", map["subject"]),
+      maybe_tag("ApplicID", map["applic_id"]),
+      maybe_tag("ReplyApplicID", map["reply_applic_id"]),
+      maybe_tag("AuxApplicInfo", map["aux_applic_info"]),
+      close_root("DeliverReq")
+    ]
 
-      sender ->
-        with :ok <- ensure_only_children(sender, ["VASPID", "VASID", "SenderAddress"]),
-             {:ok, sender_address} <- optional_address(sender, "SenderAddress") do
-          map =
-            %{}
-            |> maybe_put("vasp_id", text_value(sender, "VASPID"))
-            |> maybe_put("vas_id", text_value(sender, "VASID"))
-            |> maybe_put("sender_address", sender_address)
+    {:ok, IO.iodata_to_binary(xml)}
+  end
 
-          {:ok, map}
-        end
+  defp encode_deliver_res(map) do
+    with {:ok, status} <- encode_status(Map.get(map, "status", %{})) do
+      xml = [
+        open_root("DeliverRsp"),
+        tag("MM7Version", map["mm7_version"]),
+        status,
+        maybe_tag("ServiceCode", map["service_code"]),
+        close_root("DeliverRsp")
+      ]
+
+      {:ok, IO.iodata_to_binary(xml)}
     end
   end
 
-  defp decode_recipients(root, tag_name) do
-    case find_child(root, tag_name) do
-      nil -> error(:invalid_structure, "missing #{tag_name}")
-      recipients -> decode_recipients_node(recipients)
-    end
+  defp encode_sender_identification(nil), do: "<SenderIdentification/>"
+
+  defp encode_sender_identification(sender_identification) do
+    [
+      "<SenderIdentification>",
+      maybe_tag("VASPID", sender_identification["vasp_id"]),
+      maybe_tag("VASID", sender_identification["vas_id"]),
+      encode_optional_sender_address(sender_identification["sender_address"]),
+      "</SenderIdentification>"
+    ]
   end
 
-  defp decode_recipients_node(recipients) do
-    with :ok <- ensure_only_children(recipients, ["To", "Cc", "Bcc"]) do
-      entries =
-        recipients
-        |> child_elements()
-        |> Enum.reduce(%{"to" => [], "cc" => [], "bcc" => []}, fn entry, acc ->
-          key =
-            case x_name(entry) |> Atom.to_string() do
-              "To" -> "to"
-              "Cc" -> "cc"
-              "Bcc" -> "bcc"
-            end
+  defp encode_optional_sender_address(nil), do: ""
 
-          addresses = decode_address_list(entry)
-          Map.update!(acc, key, &(&1 ++ addresses))
-        end)
-
-      {:ok, entries}
-    end
-  end
-
-  defp decode_address_list(container) do
-    container
-    |> child_elements()
-    |> Enum.map(&decode_address_element/1)
-  end
-
-  defp decode_address_element(address_elem) do
-    name = x_name(address_elem) |> Atom.to_string()
-
-    base =
-      case name do
-        "RFC2822Address" -> %{"kind" => "rfc2822_address", "value" => text_of(address_elem)}
-        "Number" -> %{"kind" => "number", "value" => text_of(address_elem)}
-        "ShortCode" -> %{"kind" => "short_code", "value" => text_of(address_elem)}
-      end
-
-    attrs = attributes_map(address_elem)
-
-    base
-    |> maybe_put("display_only", parse_bool(attrs["displayOnly"]))
-    |> maybe_put("address_coding", attrs["addressCoding"])
-    |> maybe_put("id", attrs["id"])
-  end
-
-  defp required_address(root, tag_name) do
-    case find_child(root, tag_name) do
-      nil ->
-        error(:invalid_structure, "missing #{tag_name}")
-
-      address_node ->
-        case child_elements(address_node) do
-          [single] -> {:ok, decode_address_element(single)}
-          _ -> error(:invalid_structure, "invalid address structure", %{element: tag_name})
-        end
-    end
-  end
-
-  defp optional_address(root, tag_name) do
-    case find_child(root, tag_name) do
-      nil ->
-        {:ok, nil}
-
-      node ->
-        case child_elements(node) do
-          [single] -> {:ok, decode_address_element(single)}
-          _ -> error(:invalid_structure, "invalid address structure", %{element: tag_name})
-        end
-    end
-  end
-
-  defp decode_status(root) do
-    case find_child(root, "Status") do
-      nil ->
-        error(:invalid_structure, "missing Status")
-
-      status ->
-        with :ok <- ensure_only_children(status, ["StatusCode", "StatusText", "Details"]),
-             {:ok, status_code_text} <- required_text(status, "StatusCode"),
-             {:ok, status_code} <- parse_positive_integer(status_code_text, "status.status_code"),
-             {:ok, status_text} <- optional_text(status, "StatusText") do
-          details = details_text(status)
-
-          {:ok,
-           %{}
-           |> Map.put("status_code", status_code)
-           |> maybe_put("status_text", status_text)
-           |> maybe_put("details", details)}
-        end
-    end
-  end
-
-  defp details_text(status) do
-    case find_child(status, "Details") do
-      nil ->
-        nil
-
-      details ->
-        text = text_of(details)
-        if text == "", do: nil, else: text
-    end
-  end
-
-  defp required_text(root, child_name) do
-    case optional_text(root, child_name) do
-      {:ok, nil} -> error(:invalid_structure, "missing #{child_name}")
-      {:ok, value} -> {:ok, value}
-      {:error, _} = err -> err
-    end
-  end
-
-  defp optional_text(root, child_name) do
-    case find_child(root, child_name) do
-      nil ->
-        {:ok, nil}
-
-      child ->
-        value = text_of(child)
-
-        if value == "" do
-          error(:invalid_structure, "empty value is not allowed", %{element: child_name})
-        else
-          {:ok, value}
-        end
-    end
-  end
-
-  defp text_value(root, child_name) do
-    case optional_text(root, child_name) do
-      {:ok, value} -> value
-      _ -> nil
-    end
-  end
-
-  defp maybe_put_text(map, root, json_key, xml_name) do
-    case optional_text(root, xml_name) do
-      {:ok, nil} -> map
-      {:ok, value} -> Map.put(map, json_key, value)
-      _ -> map
-    end
-  end
-
-  defp maybe_put_bool(map, root, json_key, xml_name) do
-    case optional_text(root, xml_name) do
-      {:ok, nil} -> map
-      {:ok, value} -> Map.put(map, json_key, parse_bool(value))
-      _ -> map
-    end
-  end
-
-  defp maybe_put_recipients(map, root) do
-    case find_child(root, "Recipients") do
-      nil ->
-        map
-
-      node ->
-        {:ok, decoded} = decode_recipients_node(node)
-        Map.put(map, "recipients", decoded)
-    end
-  end
-
-  defp maybe_put_reply_charging(map, root) do
-    case find_child(root, "ReplyCharging") do
-      nil ->
-        map
-
-      node ->
-        attrs = attributes_map(node)
-
-        reply_charging =
-          %{}
-          |> maybe_put("reply_charging_size", parse_int_or_nil(attrs["replyChargingSize"]))
-          |> maybe_put("reply_deadline", attrs["replyDeadline"])
-
-        if map_size(reply_charging) == 0 do
-          Map.put(map, "reply_charging", %{})
-        else
-          Map.put(map, "reply_charging", reply_charging)
-        end
-    end
-  end
-
-  defp maybe_put_delivery_condition(map, root) do
-    case find_child(root, "DeliveryCondition") do
-      nil ->
-        map
-
-      node ->
-        if Enum.all?(child_elements(node), fn c -> x_name(c) == :DC end) do
-          values =
-            node
-            |> child_elements()
-            |> Enum.map(&text_of/1)
-            |> Enum.map(&String.to_integer/1)
-
-          Map.put(map, "delivery_condition", %{"dc" => values})
-        else
-          map
-        end
-    end
-  end
-
-  defp maybe_put_uacapabilities(map, root) do
-    case find_child(root, "UACapabilities") do
-      nil ->
-        map
-
-      node ->
-        attrs = attributes_map(node)
-
-        cap =
-          %{}
-          |> maybe_put("uaprof", attrs["UAProf"])
-          |> maybe_put("time_stamp", attrs["TimeStamp"])
-
-        Map.put(map, "ua_capabilities", cap)
-    end
-  end
-
-  defp maybe_put_content(map, root) do
-    case find_child(root, "Content") do
-      nil ->
-        map
-
-      content ->
-        attrs = attributes_map(content)
-        href = attrs["href"]
-
-        if is_binary(href) and String.starts_with?(String.downcase(href), "cid:") do
-          Map.put(map, "_mime_rejected", true)
-        else
-          Map.put(
-            map,
-            "content",
-            %{}
-            |> maybe_put("href", href)
-            |> maybe_put("allow_adaptations", parse_bool(attrs["allowAdaptations"]))
-          )
-        end
-    end
-  end
-
-  defp reject_if_present(root, tag_name) do
-    if find_child(root, tag_name) do
-      error(:unsupported_stage_feature, "unsupported stage feature", %{
-        feature: "mime",
-        element: tag_name
-      })
-    else
-      :ok
-    end
-  end
-
-  defp reject_encode_deliver_unsupported(map) do
-    if Map.has_key?(map, "previouslysentby") or Map.has_key?(map, "previouslysentdateandtime") do
-      error(:unsupported_stage_feature, "unsupported stage feature", %{feature: "mime"})
-    else
-      :ok
-    end
-  end
-
-  defp reject_content_cid(map) do
-    case map do
-      %{"content" => %{"href" => href}} when is_binary(href) ->
-        if String.starts_with?(String.downcase(href), "cid:") do
-          error(:unsupported_stage_feature, "unsupported stage feature", %{feature: "mime"})
-        else
-          :ok
-        end
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp maybe_required_submit_message_id(map, status) do
-    code = status["status_code"]
-    message_id = map["message_id"]
-
-    cond do
-      code == 1000 and not present?(message_id) ->
-        error(:missing_mandatory_fields, "missing mandatory fields", %{
-          kind: "mm7_submit_res",
-          fields: ["message_id"]
-        })
-
-      present?(message_id) ->
-        {:ok, message_id}
-
-      true ->
-        {:ok, nil}
-    end
-  end
-
-  defp fetch_status(map) do
-    case map["status"] do
-      %{} = status ->
-        with {:ok, code} <- parse_positive_integer(status["status_code"], "status.status_code") do
-          status_text =
-            if present?(status["status_text"]) do
-              status["status_text"]
-            else
-              default_status_text(code)
-            end
-
-          {:ok,
-           %{"status_code" => code, "status_text" => status_text, "details" => status["details"]}}
-        end
-
-      _ ->
-        error(:invalid_structure, "status must be object")
-    end
-  end
-
-  defp default_status_text(1000), do: "Success"
-  defp default_status_text(_), do: "Status"
-
-  defp fetch_recipients(map) do
-    case map["recipients"] do
-      %{} = recipients -> {:ok, recipients}
-      _ -> error(:invalid_structure, "recipients must be object")
-    end
-  end
-
-  defp fetch_address(map, key) do
-    case map[key] do
-      %{} = address -> {:ok, address}
-      _ -> error(:invalid_structure, "#{key} must be object")
-    end
-  end
-
-  defp fetch_string(map, key) do
-    case map[key] do
-      value when is_binary(value) and value != "" -> {:ok, value}
-      _ -> error(:invalid_structure, "#{key} must be non-empty string")
-    end
-  end
-
-  defp encode_sender_identification(map) do
-    case map["sender_identification"] do
-      nil ->
-        "<SenderIdentification/>"
-
-      %{} = sender ->
-        [
-          "<SenderIdentification>",
-          maybe_tag("VASPID", sender["vasp_id"]),
-          maybe_tag("VASID", sender["vas_id"]),
-          encode_sender_address(sender["sender_address"]),
-          "</SenderIdentification>"
-        ]
-
-      _ ->
-        "<SenderIdentification/>"
-    end
-  end
-
-  defp encode_sender_address(nil), do: ""
-
-  defp encode_sender_address(%{} = address) do
+  defp encode_optional_sender_address(address) do
     wrap("SenderAddress", encode_address(address))
   end
 
-  defp encode_recipients(%{} = recipients) do
-    to = encode_recipient_group("To", recipients["to"])
-    cc = encode_recipient_group("Cc", recipients["cc"])
-    bcc = encode_recipient_group("Bcc", recipients["bcc"])
-    ["<Recipients>", to, cc, bcc, "</Recipients>"]
+  defp encode_recipients(recipients) do
+    [
+      "<Recipients>",
+      encode_recipient_group("To", recipients["to"]),
+      encode_recipient_group("Cc", recipients["cc"]),
+      encode_recipient_group("Bcc", recipients["bcc"]),
+      "</Recipients>"
+    ]
   end
 
-  defp encode_optional_recipients(map) do
-    case map["recipients"] do
-      %{} = recipients -> encode_recipients(recipients)
-      _ -> ""
-    end
-  end
+  defp encode_optional_recipients(nil), do: ""
+  defp encode_optional_recipients(recipients), do: encode_recipients(recipients)
 
   defp encode_recipient_group(_tag, nil), do: ""
+  defp encode_recipient_group(_tag, []), do: ""
 
-  defp encode_recipient_group(tag, list) when is_list(list) do
-    if list == [] do
-      ""
-    else
-      ["<", tag, ">", Enum.map(list, &encode_address/1), "</", tag, ">"]
-    end
+  defp encode_recipient_group(tag, list) do
+    ["<", tag, ">", Enum.map(list, &encode_address/1), "</", tag, ">"]
   end
 
-  defp encode_recipient_group(_tag, _), do: ""
+  defp encode_address(%{"kind" => kind, "value" => value} = address) do
+    tag_name = @address_kind_to_tag[kind] || "Number"
 
-  defp encode_address(%{"kind" => kind, "value" => value} = address) when is_binary(value) do
-    {tag_name, attrs} =
-      case kind do
-        "rfc2822_address" -> {"RFC2822Address", encode_address_attrs(address)}
-        "short_code" -> {"ShortCode", encode_address_attrs(address)}
-        _ -> {"Number", encode_address_attrs(address)}
-      end
-
-    ["<", tag_name, attrs, ">", escape_text(value), "</", tag_name, ">"]
+    [
+      "<",
+      tag_name,
+      encode_address_attrs(address),
+      ">",
+      escape(value),
+      "</",
+      tag_name,
+      ">"
+    ]
   end
 
-  defp encode_address(_), do: ""
+  defp encode_address(_address), do: ""
 
   defp encode_address_attrs(address) do
     [
-      maybe_attr("displayOnly", address["display_only"]),
+      maybe_attr("displayOnly", bool_to_text(address["display_only"])),
       maybe_attr("addressCoding", address["address_coding"]),
       maybe_attr("id", address["id"])
     ]
   end
 
-  defp encode_optional_submit_req(map) do
-    reply_charging = encode_reply_charging(map["reply_charging"])
-    delivery_condition = encode_delivery_condition(map["delivery_condition"])
+  defp encode_status(status) do
+    with {:ok, status_code} <- parse_positive_integer(status["status_code"], "status.status_code") do
+      status_text = status["status_text"] || default_status_text(status_code)
 
-    [
-      maybe_tag("ServiceCode", map["service_code"]),
-      maybe_tag("LinkedID", map["linked_id"]),
-      maybe_tag("MessageClass", map["message_class"]),
-      maybe_tag("TimeStamp", map["time_stamp"]),
-      reply_charging,
-      maybe_tag("EarliestDeliveryTime", map["earliest_delivery_time"]),
-      maybe_tag("ExpiryDate", map["expiry_date"]),
-      maybe_tag("DeliveryReport", bool_to_text(map["delivery_report"])),
-      maybe_tag("ReadReply", bool_to_text(map["read_reply"])),
-      maybe_tag("Priority", map["priority"]),
-      maybe_tag("Subject", map["subject"]),
-      maybe_tag("ChargedParty", map["charged_party"]),
-      maybe_tag("ChargedPartyID", map["charged_party_id"]),
-      maybe_tag("DistributionIndicator", bool_to_text(map["distribution_indicator"])),
-      delivery_condition,
-      maybe_tag("ApplicID", map["applic_id"]),
-      maybe_tag("ReplyApplicID", map["reply_applic_id"]),
-      maybe_tag("AuxApplicInfo", map["aux_applic_info"]),
-      maybe_tag("ContentClass", map["content_class"]),
-      maybe_tag("DRMContent", bool_to_text(map["drm_content"])),
-      encode_optional_content(map)
-    ]
-  end
-
-  defp encode_optional_content(map) do
-    case map["content"] do
-      %{} = content ->
-        href = content["href"]
-
-        cond do
-          not is_binary(href) or href == "" ->
-            ""
-
-          String.starts_with?(String.downcase(href), "cid:") ->
-            ""
-
-          true ->
-            [
-              "<Content",
-              maybe_attr("href", href),
-              maybe_attr("allowAdaptations", bool_to_text(content["allow_adaptations"])),
-              "/>"
-            ]
-        end
-
-      _ ->
-        ""
+      {:ok,
+       [
+         "<Status>",
+         tag("StatusCode", Integer.to_string(status_code)),
+         tag("StatusText", status_text),
+         maybe_tag("Details", status["details"]),
+         "</Status>"
+       ]}
     end
   end
 
-  defp encode_reply_charging(nil), do: ""
+  defp default_status_text(1000), do: "Success"
+  defp default_status_text(1100), do: "Partial success"
+  defp default_status_text(2000), do: "Client error"
+  defp default_status_text(3000), do: "Server error"
+  defp default_status_text(4000), do: "Service error"
+  defp default_status_text(_code), do: "Status"
 
-  defp encode_reply_charging(%{} = reply) do
-    [
-      "<ReplyCharging",
-      maybe_attr("replyChargingSize", reply["reply_charging_size"]),
-      maybe_attr("replyDeadline", reply["reply_deadline"]),
-      "/>"
-    ]
+  defp open_root(name), do: ["<", name, " xmlns=\"", @canonical_ns, "\">"]
+  defp close_root(name), do: ["</", name, ">"]
+
+  defp wrap(_name, ""), do: ""
+
+  defp wrap(name, inner) do
+    ["<", name, ">", inner, "</", name, ">"]
   end
 
-  defp encode_reply_charging(_), do: ""
-
-  defp encode_delivery_condition(nil), do: ""
-
-  defp encode_delivery_condition(%{"dc" => list}) when is_list(list) do
-    items = Enum.map(list, fn v -> tag("DC", to_string(v)) end)
-    ["<DeliveryCondition>", items, "</DeliveryCondition>"]
+  defp tag(name, value) do
+    ["<", name, ">", escape(value), "</", name, ">"]
   end
 
-  defp encode_delivery_condition(_), do: ""
+  defp maybe_tag(_name, nil), do: ""
+  defp maybe_tag(_name, ""), do: ""
+  defp maybe_tag(name, value), do: tag(name, value)
 
-  defp encode_uacapabilities(map) do
-    case map["ua_capabilities"] do
-      %{} = cap ->
-        [
-          "<UACapabilities",
-          maybe_attr("UAProf", cap["uaprof"]),
-          maybe_attr("TimeStamp", cap["time_stamp"]),
-          "/>"
-        ]
+  defp maybe_attr(_name, nil), do: ""
+  defp maybe_attr(_name, ""), do: ""
+  defp maybe_attr(name, value), do: [" ", name, "=\"", escape(value), "\""]
 
-      _ ->
-        ""
-    end
+  defp escape(value) when is_binary(value) do
+    value
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
+    |> String.replace("\"", "&quot;")
+    |> String.replace("'", "&apos;")
   end
 
-  defp encode_status(%{"status_code" => status_code} = status) do
-    [
-      "<Status>",
-      tag("StatusCode", to_string(status_code)),
-      maybe_tag("StatusText", status["status_text"]),
-      maybe_tag("Details", status["details"]),
-      "</Status>"
-    ]
-  end
+  defp escape(value), do: value |> to_string() |> escape()
 
-  defp child_elements(root) do
-    root
-    |> x_content()
-    |> Enum.filter(&element?(&1))
-  end
-
-  defp find_child(root, child_name) do
-    Enum.find(child_elements(root), fn child ->
-      x_name(child) |> Atom.to_string() == child_name
-    end)
-  end
-
-  defp text_of(node) do
-    node
-    |> x_content()
-    |> Enum.filter(&text_node?(&1))
-    |> Enum.map(&t_value(&1))
-    |> Enum.map(&to_string/1)
-    |> Enum.join("")
-    |> String.trim()
-  end
-
-  defp attributes_map(node) do
-    node
-    |> x_attrs()
-    |> Enum.reduce(%{}, fn attr, acc ->
-      name = a_name(attr) |> Atom.to_string()
-      Map.put(acc, name, to_string(a_value(attr)))
-    end)
-  end
-
-  defp element?({:xmlElement, _, _, _, _, _, _, _, _, _, _, _}), do: true
-  defp element?(_), do: false
-
-  defp text_node?({:xmlText, _, _, _, _, _}), do: true
-  defp text_node?(_), do: false
-
-  defp x_name({:xmlElement, name, _, _, _, _, _, _, _, _, _, _}), do: name
-  defp x_attrs({:xmlElement, _, _, _, _, _, _, attrs, _, _, _, _}), do: attrs
-  defp x_content({:xmlElement, _, _, _, _, _, _, _, content, _, _, _}), do: content
-
-  defp a_name({:xmlAttribute, name, _, _, _, _, _, _, _, _}), do: name
-  defp a_value({:xmlAttribute, _, _, _, _, _, _, _, value, _}), do: value
-
-  defp t_value({:xmlText, _, _, _, value, _}), do: value
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, _key, ""), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp parse_positive_integer(value, _field) when is_integer(value) and value > 0,
     do: {:ok, value}
 
   defp parse_positive_integer(value, field) when is_binary(value) do
     case Integer.parse(value) do
-      {int, ""} when int > 0 -> {:ok, int}
-      _ -> error(:invalid_structure, "#{field} must be positive integer")
+      {parsed, ""} when parsed > 0 -> {:ok, parsed}
+      _ -> error(:invalid_structure, "expected positive integer", %{field: field})
     end
   end
 
   defp parse_positive_integer(_value, field) do
-    error(:invalid_structure, "#{field} must be positive integer")
+    error(:invalid_structure, "expected positive integer", %{field: field})
   end
-
-  defp parse_int_or_nil(nil), do: nil
-  defp parse_int_or_nil(value) when is_integer(value), do: value
-
-  defp parse_int_or_nil(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, ""} -> int
-      _ -> nil
-    end
-  end
-
-  defp parse_int_or_nil(_), do: nil
-
-  defp parse_bool(nil), do: nil
-  defp parse_bool(true), do: true
-  defp parse_bool(false), do: false
-
-  defp parse_bool(value) when is_binary(value) do
-    case String.downcase(String.trim(value)) do
-      "true" -> true
-      "false" -> false
-      "1" -> true
-      "0" -> false
-      _ -> nil
-    end
-  end
-
-  defp parse_bool(_), do: nil
 
   defp bool_to_text(true), do: "true"
   defp bool_to_text(false), do: "false"
-  defp bool_to_text(_), do: nil
+  defp bool_to_text(_value), do: nil
 
-  defp tag(name, value), do: ["<", name, ">", escape_text(value), "</", name, ">"]
-  defp maybe_tag(_name, nil), do: ""
-
-  defp maybe_tag(name, value) do
-    value = to_string(value)
-    if value == "", do: "", else: tag(name, value)
-  end
-
-  defp maybe_attr(_name, nil), do: ""
-
-  defp maybe_attr(name, value) do
-    value = to_string(value)
-    if value == "", do: "", else: [" ", name, "=\"", escape_attr(value), "\""]
-  end
-
-  defp wrap(name, inner), do: ["<", name, ">", inner, "</", name, ">"]
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
-
-  defp present?(value) when is_binary(value), do: value != ""
-  defp present?(nil), do: false
-  defp present?(value), do: value != nil
-
-  defp stringify_keys(value) when is_map(value) do
-    value
-    |> Enum.reduce(%{}, fn {k, v}, acc ->
-      key = if is_atom(k), do: Atom.to_string(k), else: to_string(k)
-      Map.put(acc, key, stringify_keys(v))
+  defp validate_string_fields(map, fields) do
+    Enum.reduce_while(fields, :ok, fn field, :ok ->
+      case Map.get(map, field) do
+        nil -> {:cont, :ok}
+        value when is_binary(value) and value != "" -> {:cont, :ok}
+        _ -> {:halt, error(:invalid_structure, "field must be non-empty string", %{field: field})}
+      end
     end)
   end
 
-  defp stringify_keys(value) when is_list(value), do: Enum.map(value, &stringify_keys/1)
+  defp validate_boolean_fields(map, fields) do
+    Enum.reduce_while(fields, :ok, fn field, :ok ->
+      case Map.get(map, field) do
+        nil -> {:cont, :ok}
+        true -> {:cont, :ok}
+        false -> {:cont, :ok}
+        _ -> {:halt, error(:invalid_structure, "field must be boolean", %{field: field})}
+      end
+    end)
+  end
+
+  defp optional_attr(node, name) do
+    case Map.get(node.attrs, name) do
+      nil -> {:ok, nil}
+      "" -> error(:invalid_structure, "empty value is not allowed", %{element: name})
+      value -> {:ok, value}
+    end
+  end
+
+  defp parse_optional_xml_bool(nil, _field), do: {:ok, nil}
+  defp parse_optional_xml_bool("true", _field), do: {:ok, true}
+  defp parse_optional_xml_bool("1", _field), do: {:ok, true}
+  defp parse_optional_xml_bool("false", _field), do: {:ok, false}
+  defp parse_optional_xml_bool("0", _field), do: {:ok, false}
+
+  defp parse_optional_xml_bool(_value, field) do
+    error(:invalid_structure, "expected boolean", %{field: field})
+  end
+
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {key, value} -> {to_string(key), stringify_keys(value)} end)
+  end
+
+  defp stringify_keys(list) when is_list(list), do: Enum.map(list, &stringify_keys/1)
   defp stringify_keys(value), do: value
-
-  defp escape_text(value) do
-    value
-    |> to_string()
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-  end
-
-  defp escape_attr(value) do
-    value
-    |> escape_text()
-    |> String.replace("\"", "&quot;")
-    |> String.replace("'", "&apos;")
-  end
 
   defp error(code, message, details \\ %{}) do
     {:error, %{code: code, message: message, details: details}}
