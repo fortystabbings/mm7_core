@@ -78,6 +78,7 @@ MIX_HOME=/tmp/mix HEX_HOME=/tmp/hex mix test
   - `templates/stage1/structure/struct/*`
   - `templates/stage1/structure/xml/*`
   - это inspection-only файлы для визуальной сверки со spec и struct contract, не рабочие payload
+- Устаревшие JSON artifact directories удалены; accepted stage-1 artifact set содержит только XML и struct files.
 - Ручной вход/выход:
   - `samples/in`
   - `samples/out`
