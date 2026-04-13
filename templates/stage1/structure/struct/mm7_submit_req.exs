@@ -1,5 +1,6 @@
 # MM7Core.Messages.SubmitReq
 # mandatory: mm7_version, recipients
+# sender_identification optional in struct contract, but canonical XML still emits SenderIdentification container
 %MM7Core.Messages.SubmitReq{
   mm7_version: "<required:string>",
   sender_identification: %MM7Core.Messages.SenderIdentification{

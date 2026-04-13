@@ -30,6 +30,10 @@
   - `MM7Core.Messages.SubmitRsp`
   - `MM7Core.Messages.DeliverReq`
   - `MM7Core.Messages.DeliverRsp`
+- Внутренняя архитектура stage-1:
+  - `MM7Core` — thin routing/core entry module
+  - message-specific logic вынесена в отдельные `MM7Core.Messages.*` modules по виду сообщения
+- Общий nested/XML support для этих модулей держится во внутреннем `MM7Core.Messages.Support`; это не public API.
 
 Пример XML -> struct:
 
@@ -84,7 +88,7 @@ MIX_HOME=/tmp/mix HEX_HOME=/tmp/hex mix test
    - либо `.exs` файл, который вычисляется в один поддержанный struct.
    - `.exs` вход исполняется локально Elixir-рантаймом, поэтому используйте только доверенные файлы.
 2. Запустите одну команду:
-   Запускайте её из корня репозитория. Скрипт пишет результат только после успешной конвертации и затем оставляет в `samples/out` ровно один актуальный non-hidden файл.
+   Скрипт пишет результат только после успешной конвертации и затем оставляет в `samples/out` ровно один актуальный non-hidden файл.
 
 ```bash
 elixir scripts/manual_convert.exs
