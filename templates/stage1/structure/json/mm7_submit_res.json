@@ -1,0 +1,11 @@
+{
+  "__note": "Stage-1 структура SubmitRsp. status.status_code обязателен.",
+  "kind": "mm7_submit_res",
+  "mm7_version": "<required:string>",
+  "status": {
+    "status_code": "<required:positive_integer>",
+    "status_text": "<optional:string>",
+    "details": "<optional:string>"
+  },
+  "message_id": "<conditionally_required:string:for success-case>"
+}

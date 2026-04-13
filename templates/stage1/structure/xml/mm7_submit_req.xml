@@ -1,0 +1,25 @@
+<SubmitReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <!-- required -->
+  <MM7Version>{{required_mm7_version}}</MM7Version>
+
+  <!-- required container -->
+  <SenderIdentification>
+    <VASPID>{{optional_vasp_id}}</VASPID>
+    <VASID>{{optional_vas_id}}</VASID>
+    <SenderAddress>
+      <!-- one of: RFC2822Address | Number | ShortCode -->
+      <RFC2822Address>{{optional_sender_address}}</RFC2822Address>
+    </SenderAddress>
+  </SenderIdentification>
+
+  <!-- required container with at least one address in To/Cc/Bcc -->
+  <Recipients>
+    <To>
+      <Number>{{required_recipient_number}}</Number>
+    </To>
+  </Recipients>
+
+  <DeliveryReport>{{optional_true_or_false}}</DeliveryReport>
+  <Subject>{{optional_subject}}</Subject>
+  <Content href="{{optional_href_not_cid}}" allowAdaptations="{{optional_true_or_false}}"/>
+</SubmitReq>

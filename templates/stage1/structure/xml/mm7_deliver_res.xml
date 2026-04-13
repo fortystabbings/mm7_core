@@ -1,0 +1,13 @@
+<DeliverRsp xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <!-- required -->
+  <MM7Version>{{required_mm7_version}}</MM7Version>
+
+  <!-- required -->
+  <Status>
+    <StatusCode>{{required_positive_integer}}</StatusCode>
+    <StatusText>{{optional_status_text}}</StatusText>
+    <Details>{{optional_details}}</Details>
+  </Status>
+
+  <ServiceCode>{{optional_service_code}}</ServiceCode>
+</DeliverRsp>

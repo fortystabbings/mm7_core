@@ -1,0 +1,12 @@
+{
+  "kind": "mm7_deliver_req",
+  "mm7_version": "6.8.0",
+  "sender": {
+    "kind": "rfc2822_address",
+    "value": "sender@relay.example"
+  },
+  "subject": "Stage-1 DeliverReq sample",
+  "content": {
+    "href": "https://example.com/mm/content/deliver-1"
+  }
+}

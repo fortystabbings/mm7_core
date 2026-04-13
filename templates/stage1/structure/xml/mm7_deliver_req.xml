@@ -1,0 +1,23 @@
+<DeliverReq xmlns="http://www.3gpp.org/ftp/Specs/archive/23_series/23.140/schema/REL-6-MM7-1-4">
+  <!-- required -->
+  <MM7Version>{{required_mm7_version}}</MM7Version>
+
+  <!-- required -->
+  <Sender>
+    <!-- one of: RFC2822Address | Number | ShortCode -->
+    <RFC2822Address>{{required_sender_address}}</RFC2822Address>
+  </Sender>
+
+  <Recipients>
+    <To>
+      <Number>{{optional_recipient_number}}</Number>
+    </To>
+  </Recipients>
+
+  <Subject>{{optional_subject}}</Subject>
+  <Content href="{{optional_href_not_cid}}" allowAdaptations="{{optional_true_or_false}}"/>
+
+  <!-- stage-1: unsupported and rejected if present -->
+  <!-- <Previouslysentby>...</Previouslysentby> -->
+  <!-- <Previouslysentdateandtime>...</Previouslysentdateandtime> -->
+</DeliverReq>

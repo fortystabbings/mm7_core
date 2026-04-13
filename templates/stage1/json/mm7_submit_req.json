@@ -1,0 +1,28 @@
+{
+  "kind": "mm7_submit_req",
+  "mm7_version": "6.8.0",
+  "sender_identification": {
+    "vasp_id": "acme_vasp",
+    "vas_id": "promo_service",
+    "sender_address": {
+      "kind": "rfc2822_address",
+      "value": "sender@acme.example"
+    }
+  },
+  "recipients": {
+    "to": [
+      {
+        "kind": "number",
+        "value": "79001234567"
+      }
+    ],
+    "cc": [],
+    "bcc": []
+  },
+  "subject": "Stage-1 SubmitReq sample",
+  "delivery_report": true,
+  "content": {
+    "href": "https://example.com/mm/content/123",
+    "allow_adaptations": true
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "__note": "Stage-1 структура DeliverReq. sender обязателен.",
+  "__note_stage1_limits": "previouslysentby / previouslysentdateandtime сейчас не поддержаны и должны отклоняться.",
+  "kind": "mm7_deliver_req",
+  "mm7_version": "<required:string>",
+  "sender": {
+    "kind": "<required:rfc2822_address|number|short_code>",
+    "value": "<required:string>",
+    "display_only": "<optional:boolean>",
+    "address_coding": "<optional:string>",
+    "id": "<optional:string>"
+  },
+  "recipients": {
+    "to": [],
+    "cc": [],
+    "bcc": []
+  },
+  "subject": "<optional:string>",
+  "content": {
+    "href": "<optional:string:not cid>",
+    "allow_adaptations": "<optional:boolean>"
+  }
+}
